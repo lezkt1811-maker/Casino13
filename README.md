@@ -14,14 +14,14 @@ It is plain HTML, CSS and JavaScript with no build step. Open `index.html` in a 
 
 ## Sound
 
-Every sound is made live in the browser with the Web Audio API, with no audio files. The effects are all sparkles, fireworks and coins.
+Every sound is made live in the browser with the Web Audio API, with no audio files. Wins use a slot machine credit tally; celebrations add sparkles and fireworks.
 
 - **Cosmos (ambience):** off by default, so the game is silent between spins. Tick Cosmos for occasional soft sparkles.
 - **Spin:** a magic swoosh that leaves a trail of glitter.
 - **Reel stops:** a short, dry thud and a few sparkles.
 - **Wins:** a slot machine credit tally. A fast electronic *ding-ding-ding-ding* rings about 16 times a second while the Win meter counts up, climbing in pitch as it goes. A short win jingle plays when the count finishes. Bigger wins tally for longer.
-- **Big wins:** fireworks (a whistle up, a bang and a crackle), 90s anime brass hits, and more coins and sparkles.
-- **Jackpot:** a huge blast, a barrage of six fireworks, a brass fanfare and an avalanche of more than a hundred coins.
+- **Big wins:** a longer tally and a bigger jingle, followed by fireworks (a whistle up, a bang and a crackle).
+- **Jackpot:** a huge blast, a barrage of six fireworks, a brass fanfare and a four-second credit tally.
 - **Free spins:** a whirling tone that flies out and back, then a sparkling pop.
 
 ## Paytable (per line × bet per line)
