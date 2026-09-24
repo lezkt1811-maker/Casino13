@@ -203,7 +203,7 @@
     } else if (res.total > 0) {
       var big = res.total >= totalBet() * 10;
       say(parts.join(' · ') + ' — +' + res.total.toLocaleString(), 'win' + (big ? ' big' : ''));
-      var rollDur = Math.min(3, 0.6 + (res.total / totalBet()) * 0.12);
+      var rollDur = Math.min(4, 1 + (res.total / totalBet()) * 0.1);
       rollUp(res.total, rollDur);
       audio.win(big, res.total / totalBet(), rollDur);
     } else if (!res.freeSpins && !res.eclipse) {
@@ -645,6 +645,34 @@
       for (var i = 0; i < count; i++) clink(at + dur * Math.pow(Math.random(), 1.6), (vol || 0.06) * rand(0.4, 0.9));
     }
 
+    // ---- slot machine credit tally ----
+    // One electronic "ding": a bright sine with a touch of square for that
+    // cabinet-speaker edge, decaying fast so rapid dings stay crisp.
+    function ding(m, at, vol) {
+      vol = vol || 0.2;
+      var f = hz(m);
+      voice(f, at, 0.14, { vol: vol, rev: 0.12 });
+      voice(f * 2, at, 0.07, { vol: vol * 0.3, type: 'triangle', rev: 0.1 });
+      voice(f, at, 0.05, { vol: vol * 0.18, type: 'square', rev: 0.05 });
+    }
+    // The credit meter tally: "ding-ding-ding-ding" about 16 times a second
+    // for as long as the Win meter counts up, cycling a major arpeggio that
+    // climbs a semitone every eight dings to build excitement.
+    function tally(at, dur, vol) {
+      var pattern = [0, 4, 7, 12], n = Math.max(4, Math.round(dur * 16));
+      for (var i = 0; i < n; i++) ding(79 + pattern[i % 4] + Math.floor(i / 8), at + i / 16, vol || 0.2);
+    }
+    // The payout-complete jingle: a quick rising arpeggio into a held chord.
+    function winJingle(at, big, lift) {
+      var k = lift || 0;
+      [79, 84, 88, 91].forEach(function (m, i) { ding(m + k, at + i * 0.07, 0.22); });
+      [84, 88, 91].forEach(function (m) {
+        voice(hz(m + k), at + 0.3, big ? 0.9 : 0.55, { vol: 0.1, hold: big ? 0.45 : 0.2, rev: 0.25 });
+        voice(hz(m + k), at + 0.3, big ? 0.9 : 0.55, { vol: 0.025, type: 'square', hold: big ? 0.45 : 0.2, rev: 0.2 });
+      });
+      if (big) [91, 96].forEach(function (m, i) { ding(m + k, at + 0.35 + i * 0.12, 0.2); });
+    }
+
     // ---- explosions ----
     function boom(at, size) {
       size = size || 1;
@@ -737,15 +765,11 @@
       win: function (big, times, dur) {
         if (!ready()) return;
         dur = dur || 1;
-        kaching(0, 0.07);
-        coinDrop(0.3, dur, 0.07);
-        sparkle(0.1, 5, 0.8, 0.02);
+        tally(0.05, dur);
+        winJingle(dur + 0.1, big, Math.floor(dur * 2));
         if (big) {
-          brass([64, 71, 76, 79], 0, 0.8, 0.04);
-          firework(0.4, 0.8);
-          firework(1.2, 0.7);
-          kaching(dur + 0.3, 0.07);
-          coinShower(0.5, 25, dur, 0.05);
+          firework(dur + 0.4, 0.8);
+          firework(dur + 0.9, 0.7);
         }
       },
       // Jackpot: a barrage of fireworks, a giant blast and an avalanche of coins.
@@ -758,9 +782,8 @@
         brass([62, 69, 74, 78], 0.74, 0.16, 0.05);
         brass([67, 72, 76, 79, 84], 0.96, 1.4, 0.055);
         for (var i = 0; i < 6; i++) firework(0.6 + i * 0.55 + Math.random() * 0.2, rand(0.8, 1.3));
-        for (var k = 0; k < 6; k++) kaching(0.9 + k * 0.4, 0.07);
-        coinDrop(1, 4.5, 0.07);
-        coinShower(1, 60, 4.5, 0.055);
+        tally(0.9, 4);
+        winJingle(5, true, 8);
         sparkle(1, 80, 5, 0.025);
       },
       // Cosmic Eclipse: the light drains away with a deep rumble, then a
@@ -792,10 +815,9 @@
         this.jackpot();
         boom(0, 2);
         for (var i = 0; i < 6; i++) firework(4 + i * 0.5 + Math.random() * 0.3, rand(0.9, 1.4));
-        coinDrop(4, 4, 0.07);
-        coinShower(4, 50, 4, 0.055);
-        for (var k = 0; k < 8; k++) kaching(4.2 + k * 0.35, 0.07);
-        brass([67, 72, 76, 79, 84], 7.2, 2, 0.055);
+        tally(5.8, 3);
+        winJingle(8.9, true, 14);
+        brass([67, 72, 76, 79, 84], 9.3, 2, 0.05);
         sparkle(4, 60, 4, 0.025);
       },
       // Free spins: a whirling tone that flies out and back, then a sparkle pop.
