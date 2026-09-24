@@ -48,7 +48,7 @@ node simulate.js 5000000
 | File | Purpose |
 |---|---|
 | `index.html` | Page markup |
-| `slots.css` | Black-and-gold celestial theme  |
+| `slots.css` | Neon cyberpunk theme: plasma background, synthwave grid, rainbow glow |
 | `slots-engine.js` | Pure game logic: symbols, weights, paylines, payouts. Works in the browser and in Node |
 | `slots.js` | Reel animation, controls, Web Audio sound effects, starfield background |
 | `simulate.js` | Monte Carlo return-to-player check |

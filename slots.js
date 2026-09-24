@@ -73,16 +73,20 @@
   }
 
   var CENTER = [50, 150, 250];
+  var LINE_DEFS = '<defs><linearGradient id="rainbowLine" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="300" y2="0">' +
+    ['#ff2bd6', '#ff7a1a', '#ffe600', '#7dff3a', '#00f0ff', '#9d4dff'].map(function (c, i) {
+      return '<stop offset="' + (i / 5) + '" stop-color="' + c + '"/>';
+    }).join('') + '</linearGradient></defs>';
   function drawLines(wins) {
     var svg = els.lines;
     if (wins) {
-      svg.innerHTML = wins.map(function (w) {
+      svg.innerHTML = LINE_DEFS + wins.map(function (w) {
         return '<polyline points="' + w.rows.map(function (r, c) { return CENTER[c] + ',' + CENTER[r]; }).join(' ') + '"/>';
       }).join('');
     } else if (!spinning) {
       // preview active paylines faintly
       svg.innerHTML = E.PAYLINES.slice(0, state.lines).map(function (pl) {
-        return '<polyline style="opacity:.14" points="' + pl.rows.map(function (r, c) { return CENTER[c] + ',' + CENTER[r]; }).join(' ') + '"/>';
+        return '<polyline class="preview" points="' + pl.rows.map(function (r, c) { return CENTER[c] + ',' + CENTER[r]; }).join(' ') + '"/>';
       }).join('');
     } else {
       svg.innerHTML = '';
@@ -485,24 +489,25 @@
       cx.setTransform(dpr, 0, 0, dpr, 0, 0);
       stars = [];
       var n = Math.round(w * h / 3500);
-      for (var i = 0; i < n; i++) stars.push({ x: Math.random() * w, y: Math.random() * h, r: Math.random() * 1.3 + .2, p: Math.random() * 6.28, s: .5 + Math.random() * 1.5 });
+      for (var i = 0; i < n; i++) stars.push({ x: Math.random() * w, y: Math.random() * h, r: Math.random() * 1.3 + .2, p: Math.random() * 6.28, s: .5 + Math.random() * 1.5, h: [300, 185, 270, 50, 0][Math.floor(Math.random() * 5)] });
     }
     function frame(t) {
       cx.clearRect(0, 0, w, h);
+      cx.shadowBlur = 0;
       stars.forEach(function (s) {
         var a = reduceMotion ? .6 : .35 + .45 * Math.sin(s.p + t / 1000 * s.s);
-        cx.fillStyle = 'rgba(255,240,200,' + a.toFixed(3) + ')';
+        cx.fillStyle = 'hsla(' + s.h + ',100%,80%,' + a.toFixed(3) + ')';
         cx.beginPath(); cx.arc(s.x, s.y, s.r, 0, 6.283); cx.fill();
       });
       var size = Math.min(w, h) * .35, ox = w - size - 10, oy = 30;
-      cx.strokeStyle = 'rgba(255,215,0,.12)'; cx.lineWidth = 1;
+      cx.strokeStyle = 'rgba(0,240,255,.22)'; cx.lineWidth = 1; cx.shadowColor = '#ff2bd6'; cx.shadowBlur = 8;
       ophEdges.forEach(function (e) {
         cx.beginPath();
         cx.moveTo(ox + oph[e[0]][0] * size, oy + oph[e[0]][1] * size);
         cx.lineTo(ox + oph[e[1]][0] * size, oy + oph[e[1]][1] * size);
         cx.stroke();
       });
-      cx.fillStyle = 'rgba(255,230,150,.55)';
+      cx.fillStyle = 'rgba(255,120,240,.8)';
       oph.forEach(function (p) { cx.beginPath(); cx.arc(ox + p[0] * size, oy + p[1] * size, 2, 0, 6.283); cx.fill(); });
       if (!reduceMotion) requestAnimationFrame(frame);
     }
