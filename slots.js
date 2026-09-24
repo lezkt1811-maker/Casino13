@@ -575,37 +575,21 @@
       });
     }
 
-    // ---- ambience: a soft starlit pad with drifting sparkles ----
+    // ---- ambience: just soft sparkles drifting in and out (no hum or drone) ----
     function syncAmbience() {
       if (!ctx) return;
       if (ambienceOn() && !pad) startPad();
       if (!ambienceOn() && pad) stopPad();
     }
     function startPad() {
-      var g = ctx.createGain(), lp = ctx.createBiquadFilter(), trem = ctx.createOscillator(), tremAmt = ctx.createGain();
-      lp.type = 'lowpass'; lp.frequency.value = 1200;
-      trem.frequency.value = 0.18; tremAmt.gain.value = 0.007; trem.connect(tremAmt); tremAmt.connect(g.gain);
-      var oscs = [48, 55, 64, 71, 78].map(function (m, i) {
-        var o = ctx.createOscillator(); o.type = i < 2 ? 'sine' : 'triangle'; o.frequency.value = hz(m); o.detune.value = (i % 2 ? 5 : -5);
-        o.connect(lp); o.start(); return o;
-      });
-      lp.connect(g); out(g, 1, 0);
-      g.gain.setValueAtTime(0.0001, ctx.currentTime);
-      g.gain.exponentialRampToValueAtTime(0.018, ctx.currentTime + 4);
-      trem.start();
-      pad = { g: g, nodes: oscs.concat([trem]) };
+      pad = true;
       (function twinkle() {
         if (!pad) return;
-        sparkle(0, 2 + Math.floor(Math.random() * 4), 0.8, 0.012);
-        twinkleTimer = setTimeout(twinkle, 700 + Math.random() * 1800);
+        sparkle(0, 1 + Math.floor(Math.random() * 3), 0.8, 0.01);
+        twinkleTimer = setTimeout(twinkle, 1200 + Math.random() * 2500);
       })();
     }
-    function stopPad() {
-      var p = pad; pad = null; clearTimeout(twinkleTimer);
-      p.g.gain.cancelScheduledValues(ctx.currentTime);
-      p.g.gain.setTargetAtTime(0.0001, ctx.currentTime, 0.4);
-      setTimeout(function () { p.nodes.forEach(function (n) { n.stop(); }); }, 2500);
-    }
+    function stopPad() { pad = null; clearTimeout(twinkleTimer); }
 
     function ready() { return ctx && soundOn(); }
 

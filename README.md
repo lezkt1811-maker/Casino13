@@ -16,7 +16,7 @@ It is plain HTML, CSS and JavaScript with no build step. Open `index.html` in a 
 
 Every sound is made live in the browser with the Web Audio API, with no audio files. The effects are all sparkles, fireworks and coins.
 
-- **Cosmos (ambience):** a soft, starlit chord with glitter drifting in and out. Switch it off with the Cosmos toggle.
+- **Cosmos (ambience):** soft sparkles drifting in and out, with no background hum. Switch it off with the Cosmos toggle.
 - **Spin:** a magic swoosh that leaves a trail of glitter.
 - **Reel stops:** a solid thud and a puff of sparkles, with more sparkles on each reel.
 - **Wins:** an arcade *ka-ching* and a spill of coins that gets bigger with the size of the win.
