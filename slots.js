@@ -442,6 +442,7 @@
         try { ctx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return; }
         build();
         renderCoinBank();
+        loadSamples();
       }
       if (ctx.state === 'suspended') ctx.resume();
       syncAmbience();
@@ -645,6 +646,37 @@
       for (var i = 0; i < count; i++) clink(at + dur * Math.pow(Math.random(), 1.6), (vol || 0.06) * rand(0.4, 0.9));
     }
 
+    // ---- real recordings (optional) ----
+    // Drop audio files into the sounds/ folder and they replace the built-in
+    // synthesized sounds, e.g. sounds/win.mp3. Missing files are skipped.
+    var SAMPLE_NAMES = ['spin', 'reelstop', 'win', 'bigwin', 'jackpot', 'megajackpot', 'bonus', 'wheel', 'freespins', 'lose'];
+    var SAMPLE_EXTS = ['mp3', 'ogg', 'wav', 'm4a'];
+    var samples = {};
+    function loadSamples() {
+      if (!window.fetch) return;
+      SAMPLE_NAMES.forEach(function (name) {
+        (function tryExt(i) {
+          if (i >= SAMPLE_EXTS.length) return;
+          fetch('sounds/' + name + '.' + SAMPLE_EXTS[i]).then(function (r) {
+            if (!r.ok) throw new Error('missing');
+            return r.arrayBuffer();
+          }).then(function (data) {
+            return new Promise(function (ok, fail) { ctx.decodeAudioData(data, ok, fail); });
+          }).then(function (buf) { samples[name] = buf; }).catch(function () { tryExt(i + 1); });
+        })(0);
+      });
+    }
+    // Play a recording if one was provided; returns false so callers fall back to synth.
+    function sample(name, at, vol) {
+      var buf = samples[name];
+      if (!buf) return false;
+      var src = ctx.createBufferSource(), g = ctx.createGain();
+      src.buffer = buf; g.gain.value = vol == null ? 1 : vol;
+      src.connect(g); g.connect(master);
+      src.start(ctx.currentTime + (at || 0));
+      return true;
+    }
+
     // ---- slot machine credit tally ----
     // One electronic "ding": a bright sine with a touch of square for that
     // cabinet-speaker edge, decaying fast so rapid dings stay crisp.
@@ -745,18 +777,21 @@
       // Spin: a magic swoosh trailing glitter.
       spin: function () {
         if (!ready()) return;
+        if (sample('spin')) return;
         noise(0, 0.7, 600, 9000, 0.12, { q: 1.5, attack: 0.25, rev: 0.6 });
         sparkle(0.1, 12, 0.8, 0.028);
       },
       // Reel stop: a solid thud with a puff of sparkles.
       stop: function (c) {
         if (!ready()) return;
+        if (sample('reelstop')) return;
         voice(160, 0, 0.12, { vol: 0.18, glide: 70, rev: 0 });
         noise(0, 0.05, 3000, 900, 0.07, { type: 'lowpass', rev: 0 });
         sparkle(0.02, 2 + c, 0.15, 0.02);
       },
       miss: function () {
         if (!ready()) return;
+        if (sample('lose')) return;
         noise(0, 0.5, 2500, 400, 0.04, { q: 1, attack: 0.1, rev: 0.6 });
       },
       // Wins: ka-ching plus a coin spill sized to the win; big wins get fireworks.
@@ -764,6 +799,7 @@
       // rolls up. Big wins add fireworks and brass over the coins.
       win: function (big, times, dur) {
         if (!ready()) return;
+        if (big ? (sample('bigwin') || sample('win')) : sample('win')) return;
         dur = dur || 1;
         tally(0.05, dur);
         winJingle(dur + 0.1, big, Math.floor(dur * 2));
@@ -775,6 +811,7 @@
       // Jackpot: a barrage of fireworks, a giant blast and an avalanche of coins.
       jackpot: function () {
         if (!ready()) return;
+        if (sample('jackpot') || sample('bigwin')) return;
         boom(0, 1.6);
         sparkle(0, 40, 1.5, 0.03);
         brass([60, 67, 72, 76], 0.3, 0.16, 0.05);
@@ -790,6 +827,7 @@
       // shimmering swell and a burst of sparkles as the wheel appears.
       eclipse: function () {
         if (!ready()) return;
+        if (sample('bonus')) return;
         voice(220, 0, 1.4, { vol: 0.08, glide: 55, type: 'sawtooth', rev: 0.8 });
         noise(0, 1.4, 4000, 150, 0.12, { type: 'lowpass', attack: 0.3, rev: 0.8 });
         boom(0.9, 1.1);
@@ -801,6 +839,7 @@
       // Wheel: a ratchet click for every slice passed, slowing with the wheel.
       wheel: function (dur, slices) {
         if (!ready()) return;
+        if (sample('wheel')) return;
         var n = Math.min(slices, 90);
         for (var i = 1; i <= n; i++) {
           var t = dur * (1 - Math.pow(1 - i / n, 1 / 3)) * 0.98;
@@ -812,6 +851,7 @@
       // Mega Jackpot: everything at once, and then more of it.
       mega: function () {
         if (!ready()) return;
+        if (sample('megajackpot') || sample('jackpot') || sample('bigwin')) return;
         this.jackpot();
         boom(0, 2);
         for (var i = 0; i < 6; i++) firework(4 + i * 0.5 + Math.random() * 0.3, rand(0.9, 1.4));
@@ -823,6 +863,7 @@
       // Free spins: a whirling tone that flies out and back, then a sparkle pop.
       portal: function () {
         if (!ready()) return;
+        if (sample('freespins')) return;
         voice(700, 0, 1.6, { vol: 0.04, glide: 1800, glideTime: 0.8, glide2: 700, vib: [14, 40], rev: 0.8, echo: 0.3 });
         noise(0, 0.8, 1500, 7000, 0.05, { q: 6 });
         noise(0.8, 0.8, 7000, 1500, 0.05, { q: 6 });

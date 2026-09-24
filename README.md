@@ -24,6 +24,10 @@ Every sound is made live in the browser with the Web Audio API, with no audio fi
 - **Jackpot:** a huge blast, a barrage of six fireworks, a brass fanfare and a four-second credit tally.
 - **Free spins:** a whirling tone that flies out and back, then a sparkling pop.
 
+### Use real casino recordings
+
+Put audio files in the [`sounds/`](sounds/) folder (for example `sounds/win.mp3`) and the game plays them instead of the built-in sounds. [`sounds/README.md`](sounds/README.md) lists the file names and where to find free casino sounds.
+
 ## Paytable (per line × bet per line)
 
 | Combination | Pays |
