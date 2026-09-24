@@ -24,6 +24,10 @@
   </header>
 
   <section class="machine" aria-label="Slot machine">
+    <div class="jackpot-meter" aria-live="off">
+      <span>&#x26CE;&#xFE0E; Mega Jackpot</span>
+      <b id="jackpot">1,000</b>
+    </div>
     <div class="meters">
       <div class="meter"><span>Stardust</span><b id="credits">0</b></div>
       <div class="meter"><span>Bet</span><b id="totalBet">0</b></div>
@@ -66,6 +70,15 @@
     </div>
   </section>
 
+  <details class="card demo">
+    <summary>Demo controls</summary>
+    <p class="note">The bonus shows up about once every 325 spins. Use these to see it now. The next spin still costs your normal bet.</p>
+    <div class="demo-btns">
+      <button type="button" class="ghost" id="forceEclipse">Next spin: Cosmic Eclipse</button>
+      <button type="button" class="ghost" id="forceMega">Next spin: Mega Jackpot</button>
+    </div>
+  </details>
+
   <section class="card" aria-labelledby="payHead">
     <h2 id="payHead">Celestial paytable</h2>
     <p class="note">Wins are paid per line, times your bet per line.</p>
@@ -73,6 +86,8 @@
     <ul class="rules">
       <li><b class="g">&#x26CE;&#xFE0E; Ophiuchus</b> is wild. It stands in for any sign, the Sun, or the Moon.</li>
       <li>Three or more <b class="g">&#x26CE;&#xFE0E;</b> anywhere on the reels award <b id="fsAward">5</b> free spins.</li>
+      <li><b>Cosmic Eclipse:</b> the <b class="g">&#x2609; Sun</b>, <b class="g">&#x263D;&#xFE0E; Moon</b> and <b class="g">&#x26CE;&#xFE0E; Ophiuchus</b> together on one active line, in any order, open the <b>Zodiac Wheel</b>. Its 13 slices pay 10&ndash;100&times; your total bet, and the <b class="g">&#x26CE;&#xFE0E;</b> slice wins the <b>Mega Jackpot</b>.</li>
+      <li>The Mega Jackpot starts at 1,000 and grows by 2% of every bet until someone wins it.</li>
       <li>An <b>Elemental Trine</b> is three signs of one element on a line: fire, earth, air, or water.</li>
     </ul>
   </section>
@@ -87,6 +102,31 @@
     <p>Demo only. Stardust has no cash value, cannot be bought, and cannot be redeemed.</p>
   </footer>
 </main>
+
+<div class="overlay" id="bonus" hidden role="dialog" aria-modal="true" aria-labelledby="bonusTitle">
+  <div class="bonus-box">
+    <h2 class="bonus-title" id="bonusTitle">Cosmic Eclipse</h2>
+    <p class="bonus-sub">Spin the Zodiac Wheel. Land on <b class="g">&#x26CE;&#xFE0E;</b> to win the Mega Jackpot of <b id="bonusJackpot">0</b>!</p>
+    <div class="wheel-wrap">
+      <div class="pointer" aria-hidden="true"></div>
+      <svg id="wheel" viewBox="-110 -110 220 220" aria-hidden="true"></svg>
+      <div class="hub" aria-hidden="true">&#x26CE;&#xFE0E;</div>
+    </div>
+    <p class="bonus-result" id="bonusResult" aria-live="polite"></p>
+    <button type="button" class="spin" id="wheelSpin">Spin the wheel</button>
+  </div>
+</div>
+
+<div class="overlay mega" id="mega" hidden role="dialog" aria-modal="true" aria-labelledby="megaTitle">
+  <canvas id="confetti" aria-hidden="true"></canvas>
+  <div class="mega-box">
+    <div class="mega-oph" aria-hidden="true">&#x26CE;&#xFE0E;</div>
+    <h2 class="mega-title" id="megaTitle">Mega Jackpot</h2>
+    <div class="mega-amount" id="megaAmount">0</div>
+    <p class="mega-sub">The Serpent Bearer crowns you ruler of the 13th sign.</p>
+    <button type="button" class="spin" id="megaCollect">Collect</button>
+  </div>
+</div>
 
 <script src="slots-engine.js"></script>
 <script src="slots.js"></script>

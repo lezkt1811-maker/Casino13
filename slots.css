@@ -149,3 +149,80 @@ button:disabled{opacity:.35;cursor:not-allowed}
 @media (prefers-reduced-motion:reduce){
   .plasma,.grid,.oph-mark,h1,.machine::before,.free-banner,.sym-ophiuchus .glyph,.cell.hit,.message.big,.spin,.card h2{animation:none}
 }
+
+/* ---------- Mega Jackpot meter ---------- */
+.jackpot-meter{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;padding:6px 12px;border-radius:12px;
+  background:rgba(0,0,0,.7);position:relative;box-shadow:0 0 14px rgba(255,43,214,.5),inset 0 0 14px rgba(157,77,255,.4)}
+.jackpot-meter::before{content:"";position:absolute;inset:0;border-radius:inherit;padding:1.5px;pointer-events:none;
+  background:var(--rainbow);background-size:300% 100%;animation:slide 2s linear infinite;
+  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude}
+.jackpot-meter span{font-family:Orbitron,sans-serif;font-size:11px;font-weight:900;letter-spacing:.14em;text-transform:uppercase;color:#fff;
+  text-shadow:0 0 6px var(--pink),0 0 12px var(--pink)}
+.jackpot-meter b{font-family:Orbitron,sans-serif;font-size:clamp(18px,5.4vw,24px);font-weight:900;font-variant-numeric:tabular-nums;
+  background:var(--rainbow);background-size:200% auto;-webkit-background-clip:text;background-clip:text;color:transparent;
+  filter:drop-shadow(0 0 6px rgba(255,230,0,.8));animation:slide 3s linear infinite}
+.jackpot-meter.bump b{animation:slide 3s linear infinite,bump .35s ease-out}
+@keyframes bump{50%{transform:scale(1.15)}}
+
+/* ---------- demo controls ---------- */
+.demo summary{cursor:pointer;font-family:Orbitron,sans-serif;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--cyan);
+  text-shadow:0 0 6px rgba(0,240,255,.7)}
+.demo-btns{display:flex;gap:8px;flex-wrap:wrap}
+.ghost.armed{background:rgba(255,43,214,.25);border-color:var(--pink);color:#fff;box-shadow:0 0 12px var(--pink)}
+
+/* ---------- overlays ---------- */
+.overlay{position:fixed;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;padding:16px;
+  background:radial-gradient(circle at center,rgba(40,0,80,.82),rgba(0,0,0,.94));backdrop-filter:blur(6px);animation:fadeIn .4s ease-out}
+.overlay[hidden]{display:none}
+@keyframes fadeIn{from{opacity:0}}
+.bonus-box{width:min(420px,100%);text-align:center}
+.bonus-title{font-family:Orbitron,sans-serif;font-weight:900;font-size:clamp(22px,7vw,32px);text-transform:uppercase;letter-spacing:.08em;
+  background:var(--rainbow);background-size:200% auto;-webkit-background-clip:text;background-clip:text;color:transparent;
+  filter:drop-shadow(0 0 8px rgba(255,43,214,.9));animation:slide 2s linear infinite}
+.bonus-sub{font-size:14px;color:var(--ink);margin:6px 0 12px;line-height:1.4}
+.bonus-sub b#bonusJackpot{font-family:Orbitron,sans-serif;color:var(--yellow);text-shadow:0 0 8px rgba(255,230,0,.8)}
+.wheel-wrap{position:relative;width:min(80vw,46svh,340px);aspect-ratio:1;margin:0 auto}
+#wheel{width:100%;height:100%;display:block;border-radius:50%;
+  filter:drop-shadow(0 0 10px rgba(255,43,214,.8)) drop-shadow(0 0 26px rgba(0,240,255,.5))}
+#wheel .rotor{transition:transform 5.5s cubic-bezier(.12,.8,.18,1)}
+#wheel text{font-family:"Segoe UI Symbol","Noto Sans Symbols","Apple Symbols","DejaVu Sans",sans-serif;fill:#fff;text-anchor:middle;dominant-baseline:central;
+  paint-order:stroke;stroke:rgba(0,0,0,.65);stroke-width:2px}
+#wheel .prize{font-family:Orbitron,"Trebuchet MS",sans-serif;font-weight:900;font-size:9px}
+#wheel .glyph-t{font-size:15px}
+#wheel .win-slice path{animation:sliceFlash .4s ease-in-out infinite alternate}
+@keyframes sliceFlash{to{fill:#fff}}
+.pointer{position:absolute;top:-6px;left:50%;transform:translateX(-50%);z-index:2;width:0;height:0;
+  border-left:14px solid transparent;border-right:14px solid transparent;border-top:26px solid #fff;
+  filter:drop-shadow(0 0 6px var(--pink)) drop-shadow(0 0 12px var(--cyan))}
+.hub{position:absolute;inset:0;margin:auto;width:22%;height:22%;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  background:radial-gradient(circle,#2a0050,#000);border:2px solid #fff;font-family:"Segoe UI Symbol","Noto Sans Symbols",serif;font-size:clamp(20px,6vw,30px);
+  color:#fff;text-shadow:0 0 6px var(--pink),0 0 14px var(--cyan);box-shadow:0 0 16px var(--pink);animation:hueText 3s linear infinite}
+.bonus-result{min-height:28px;margin:12px 0 6px;font-family:Orbitron,sans-serif;font-weight:900;font-size:17px;color:#fff;
+  text-shadow:0 0 8px var(--pink),0 0 16px var(--cyan)}
+
+.mega{background:radial-gradient(circle at center,rgba(80,0,120,.9),rgba(0,0,0,.96));overflow:hidden}
+.mega::before{content:"";position:absolute;inset:-50%;pointer-events:none;
+  background:repeating-conic-gradient(from 0deg,rgba(255,43,214,.22) 0 10deg,transparent 10deg 20deg,rgba(0,240,255,.2) 20deg 30deg,transparent 30deg 40deg);
+  animation:rays 12s linear infinite}
+@keyframes rays{to{transform:rotate(360deg)}}
+.mega.flash::after{content:"";position:absolute;inset:0;background:#fff;pointer-events:none;animation:flash .7s ease-out forwards}
+@keyframes flash{from{opacity:.95}to{opacity:0}}
+#confetti{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.mega-box{position:relative;text-align:center;animation:zoomIn .8s cubic-bezier(.2,1.6,.4,1)}
+@keyframes zoomIn{from{transform:scale(.2);opacity:0}}
+.mega-oph{font-family:"Segoe UI Symbol","Noto Sans Symbols",serif;font-size:clamp(60px,20vw,110px);line-height:1;color:#fff;
+  text-shadow:0 0 10px #fff,0 0 30px var(--pink),0 0 60px var(--cyan);animation:hueText 2s linear infinite,float 2s ease-in-out infinite alternate}
+@keyframes float{to{transform:translateY(-10px) scale(1.05)}}
+.mega-title{font-family:Orbitron,sans-serif;font-weight:900;font-size:clamp(34px,11vw,64px);text-transform:uppercase;letter-spacing:.04em;line-height:1.05;margin-top:6px;
+  background:var(--rainbow);background-size:200% auto;-webkit-background-clip:text;background-clip:text;color:transparent;
+  filter:drop-shadow(0 0 10px rgba(255,43,214,1)) drop-shadow(0 0 30px rgba(0,240,255,.8));animation:slide 1s linear infinite,pulseBig .6s ease-in-out infinite alternate}
+@keyframes pulseBig{to{transform:scale(1.06)}}
+.mega-amount{font-family:Orbitron,sans-serif;font-weight:900;font-size:clamp(36px,12vw,68px);color:var(--yellow);font-variant-numeric:tabular-nums;margin:8px 0;
+  text-shadow:0 0 8px #fff,0 0 20px var(--yellow),0 0 40px var(--orange)}
+.mega-sub{color:var(--ink);font-size:15px;margin-bottom:16px;text-shadow:0 0 8px var(--pink)}
+.mega .spin{max-width:260px;margin:0 auto}
+
+@media (prefers-reduced-motion:reduce){
+  .jackpot-meter::before,.jackpot-meter b,.bonus-title,.hub,.mega::before,.mega-oph,.mega-title,.mega-box{animation:none}
+  #wheel .rotor{transition-duration:.01s}
+}

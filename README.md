@@ -28,16 +28,27 @@ Every sound is made live in the browser with the Web Audio API, with no audio fi
 
 | Combination | Pays |
 |---|---|
-| ⛎ ⛎ ⛎ Serpent Bearer Jackpot | ×1000 |
-| ☉ ☉ ☉ Solar Alignment | ×150 |
-| ☽ ☽ ☽ Lunar Alignment | ×80 |
-| Three of the same sign | ×35 |
-| Elemental Trine: three signs of one element (e.g. ♈ ♌ ♐) | ×5 |
+| ☉ ☽ ⛎ Cosmic Eclipse (any order) | **Zodiac Wheel bonus** |
+| ⛎ ⛎ ⛎ Serpent Bearer Triple | ×1000 |
+| ☉ ☉ ☉ Solar Alignment | ×130 |
+| ☽ ☽ ☽ Lunar Alignment | ×70 |
+| Three of the same sign | ×28 |
+| Elemental Trine: three signs of one element (e.g. ♈ ♌ ♐) | ×4 |
 
 - **⛎ Ophiuchus is wild.** It substitutes for any sign, the Sun or the Moon.
 - **3+ Ophiuchus anywhere** on the reels award **5 free spins** at the current bet.
 
-The simulated return to player is about **95%**, with a win on about 27% of spins:
+## Special feature: Cosmic Eclipse and the Mega Jackpot
+
+When the **Sun, Moon and Ophiuchus** land together on any active payline, in any order, the reels go dark and the **Zodiac Wheel** opens.
+
+- The wheel has 13 slices, one for each sign in true-sky order, with Ophiuchus between Scorpio and Sagittarius.
+- The 12 classic signs pay **10× to 100× your total bet**.
+- The **⛎ Ophiuchus slice wins the progressive Mega Jackpot**. The jackpot starts at 1,000 and grows by 2% of every paid bet until someone wins it. It then resets to 1,000.
+- A Mega Jackpot win sets off a full-screen celebration: a white flash, spinning light rays, a count-up, raining coins, neon fireworks and an extra-long sound finale.
+- The bonus opens about once every 325 spins, and the Mega Jackpot hits about once every 4,200 spins. To see it straight away, open **Demo controls** under the machine and arm the next spin.
+
+The simulated return to player is about **95%**, with a win on about 27% of spins. This includes free spins, the wheel and the Mega Jackpot:
 
 ```sh
 node simulate.js 5000000

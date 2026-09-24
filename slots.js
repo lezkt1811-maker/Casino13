@@ -14,13 +14,18 @@
     bet: $('bet'), lineCount: $('lineCount'), spin: $('spin'), message: $('message'),
     lines: $('lines'), freeBanner: $('freeBanner'), freeCount: $('freeCount'),
     auto: $('auto'), sound: $('sound'), ambience: $('ambience'), reset: $('reset'),
-    betUp: $('betUp'), betDown: $('betDown'), linesUp: $('linesUp'), linesDown: $('linesDown')
+    betUp: $('betUp'), betDown: $('betDown'), linesUp: $('linesUp'), linesDown: $('linesDown'),
+    jackpot: $('jackpot'), jackpotMeter: document.querySelector('.jackpot-meter'),
+    forceEclipse: $('forceEclipse'), forceMega: $('forceMega')
   };
   var strips = Array.prototype.map.call(document.querySelectorAll('.reel .strip'), function (s) { return s; });
 
   var state = load() || { credits: START_CREDITS, betIdx: 0, lines: E.PAYLINES.length, sound: true };
+  if (typeof state.jackpot !== 'number') state.jackpot = E.JACKPOT_SEED;
   var freeSpins = 0;
   var spinning = false;
+  var bonusActive = false;
+  var forced = null; // demo: 'eclipse' or 'mega' forces the next spin
   var grid = E.spinGrid();
 
   // ---------- persistence (per-browser convenience only) ----------
@@ -46,6 +51,9 @@
     });
   }
 
+  // The pool grows by fractions of a credit, so show cents like a real progressive.
+  function fmtJackpot(v) { return v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+
   function bet() { return BETS[state.betIdx]; }
   function totalBet() { return bet() * state.lines; }
 
@@ -62,7 +70,8 @@
     els.betDown.disabled = locked || state.betIdx <= 0;
     els.linesUp.disabled = locked || state.lines >= E.PAYLINES.length;
     els.linesDown.disabled = locked || state.lines <= 1;
-    els.spin.disabled = spinning;
+    els.spin.disabled = spinning || bonusActive;
+    els.jackpot.textContent = fmtJackpot(state.jackpot);
     els.spin.textContent = freeSpins > 0 ? 'Free Spin' : 'Spin';
     drawLines(null);
   }
@@ -102,7 +111,7 @@
 
   // ---------- spin ----------
   function spin() {
-    if (spinning) return;
+    if (spinning || bonusActive) return;
     var isFree = freeSpins > 0;
     if (!isFree && state.credits < totalBet()) {
       say('Not enough stardust. Lower your bet or refill.');
@@ -112,12 +121,18 @@
     audio.unlock();
     audio.spin();
     spinning = true;
-    if (isFree) freeSpins--; else state.credits -= totalBet();
+    if (isFree) freeSpins--;
+    else {
+      state.credits -= totalBet();
+      state.jackpot += totalBet() * E.JACKPOT_CONTRIBUTION;
+      els.jackpotMeter.classList.remove('bump'); void els.jackpotMeter.offsetWidth; els.jackpotMeter.classList.add('bump');
+    }
     say(isFree ? 'The Serpent Bearer spins for you…' : 'The heavens turn…');
     updateMeters(0);
     highlight([]);
 
-    var next = E.spinGrid();
+    var mode = forced; forced = null; armDemo();
+    var next = mode ? eclipseGrid() : E.spinGrid();
     var cellH = strips[0].parentNode.clientHeight / E.ROWS;
     var stops = strips.map(function (strip, c) {
       return new Promise(function (resolve) {
@@ -140,11 +155,26 @@
     Promise.all(stops).then(function () {
       grid = next;
       renderStatic();
-      settle(isFree);
+      settle(isFree, mode);
     });
   }
 
-  function settle(wasFree) {
+  // Demo helper: a random grid with Sun, Moon and Ophiuchus shuffled onto the middle line.
+  function eclipseGrid() {
+    var g = E.spinGrid(), ids = E.ECLIPSE.slice().sort(function () { return Math.random() - 0.5; });
+    ids.forEach(function (id, reel) { g[reel][1] = E.BY_ID[id]; });
+    return g;
+  }
+
+  function continueAuto(delay) {
+    if (freeSpins > 0 || els.auto.checked) {
+      setTimeout(function () {
+        if (!spinning && !bonusActive && (freeSpins > 0 || els.auto.checked)) spin();
+      }, delay);
+    }
+  }
+
+  function settle(wasFree, mode) {
     var res = E.evaluate(grid, state.lines, bet());
     state.credits += res.total;
     spinning = false;
@@ -154,15 +184,15 @@
     if (res.wins.length) { drawLines(res.wins); highlight(res.wins); }
 
     var parts = res.wins.map(function (w) { return w.label + ' ×' + w.mult; });
-    var jackpot = res.wins.some(function (w) { return w.kind === 'jackpot'; });
-    if (jackpot) {
-      say('⛎ SERPENT BEARER JACKPOT! +' + res.total.toLocaleString(), 'win big');
+    var serpent = res.wins.some(function (w) { return w.kind === 'serpent'; });
+    if (serpent) {
+      say('⛎ SERPENT BEARER TRIPLE! +' + res.total.toLocaleString(), 'win big');
       audio.jackpot();
     } else if (res.total > 0) {
       var big = res.total >= totalBet() * 10;
       say(parts.join(' · ') + ' — +' + res.total.toLocaleString(), 'win' + (big ? ' big' : ''));
       audio.win(big, res.total / totalBet());
-    } else if (!res.freeSpins) {
+    } else if (!res.freeSpins && !res.eclipse) {
       say(pickMiss());
       audio.miss();
     }
@@ -172,11 +202,201 @@
     }
     save();
 
-    if (freeSpins > 0 || els.auto.checked) {
-      setTimeout(function () {
-        if (!spinning && (freeSpins > 0 || els.auto.checked)) spin();
-      }, res.total ? 1400 : 600);
+    if (res.eclipse) {
+      bonusActive = true;
+      updateMeters(res.total);
+      drawLines(res.wins.concat([res.eclipse]));
+      highlight(res.wins.concat([res.eclipse]));
+      say('☉ ☽ ⛎ COSMIC ECLIPSE! The Zodiac Wheel awakens…', 'win big');
+      audio.eclipse();
+      setTimeout(function () { openWheel(mode === 'mega'); }, 1600);
+      return;
     }
+    continueAuto(res.total ? 1400 : 600);
+  }
+
+  // ---------- Cosmic Eclipse: the Zodiac Wheel ----------
+  var wheelRot = 0, wheelBuilt = false;
+  var SLICE = 360 / E.WHEEL.length;
+
+  function polar(r, deg) { var a = (deg - 90) * Math.PI / 180; return [r * Math.cos(a), r * Math.sin(a)]; }
+
+  function buildWheel() {
+    var svg = $('wheel'), parts = [];
+    parts.push('<defs><radialGradient id="megaSlice"><stop offset="0" stop-color="#fff"/><stop offset=".5" stop-color="#ffe600"/>' +
+      '<stop offset="1" stop-color="#ff2bd6"/></radialGradient></defs>');
+    parts.push('<circle r="106" fill="#05010f" stroke="url(#megaSlice)" stroke-width="3"/>');
+    parts.push('<g class="rotor" id="rotor">');
+    E.WHEEL.forEach(function (sl, i) {
+      var a0 = i * SLICE - SLICE / 2, a1 = a0 + SLICE;
+      var p0 = polar(100, a0), p1 = polar(100, a1);
+      var fill = sl.jackpot ? 'url(#megaSlice)' : 'hsl(' + Math.round(i * 360 / E.WHEEL.length) + ',100%,' + (i % 2 ? 42 : 52) + '%)';
+      var gp = polar(80, i * SLICE), tp = polar(56, i * SLICE);
+      var label = sl.jackpot ? 'MEGA' : '×' + sl.mult;
+      parts.push('<g id="slice' + i + '"><path d="M0 0L' + p0[0].toFixed(2) + ' ' + p0[1].toFixed(2) +
+        'A100 100 0 0 1 ' + p1[0].toFixed(2) + ' ' + p1[1].toFixed(2) + 'Z" fill="' + fill + '" stroke="#05010f" stroke-width="1.5"/>' +
+        '<text class="glyph-t" x="' + gp[0].toFixed(2) + '" y="' + gp[1].toFixed(2) + '" transform="rotate(' + (i * SLICE) + ' ' + gp[0].toFixed(2) + ' ' + gp[1].toFixed(2) + ')">' +
+        E.BY_ID[sl.id].glyph + '</text>' +
+        '<text class="prize" x="' + tp[0].toFixed(2) + '" y="' + tp[1].toFixed(2) + '" transform="rotate(' + (i * SLICE) + ' ' + tp[0].toFixed(2) + ' ' + tp[1].toFixed(2) + ')">' +
+        label + '</text></g>');
+    });
+    parts.push('</g>');
+    svg.innerHTML = parts.join('');
+    wheelBuilt = true;
+  }
+
+  var wheelMega = false, wheelDone = null;
+  function openWheel(mega) {
+    if (!wheelBuilt) buildWheel();
+    wheelMega = mega;
+    wheelDone = null;
+    document.querySelectorAll('#wheel .win-slice').forEach(function (n) { n.classList.remove('win-slice'); });
+    $('bonusJackpot').textContent = fmtJackpot(state.jackpot);
+    $('bonusResult').textContent = '';
+    $('wheelSpin').textContent = 'Spin the wheel';
+    $('wheelSpin').disabled = false;
+    $('bonus').hidden = false;
+    $('wheelSpin').focus();
+    if (els.auto.checked || freeSpins > 0) setTimeout(spinWheel, 1200);
+  }
+
+  function spinWheel() {
+    if (wheelDone) { closeWheel(); return; }
+    if ($('wheelSpin').disabled) return;
+    $('wheelSpin').disabled = true;
+    var k = wheelMega ? E.WHEEL.findIndex(function (s) { return s.jackpot; }) : E.spinWheel();
+    var target = -k * SLICE + (Math.random() - 0.5) * SLICE * 0.7;
+    var delta = ((target - wheelRot) % 360 + 360) % 360 + 360 * 6;
+    wheelRot += delta;
+    var dur = reduceMotion ? 10 : 5500;
+    $('rotor').style.transform = 'rotate(' + wheelRot + 'deg)';
+    audio.wheel(dur / 1000, Math.round(delta / SLICE));
+    setTimeout(function () { wheelLanded(k); }, dur + 200);
+  }
+
+  function wheelLanded(k) {
+    var slice = E.WHEEL[k];
+    $('slice' + k).classList.add('win-slice');
+    var btn = $('wheelSpin');
+    if (slice.jackpot) {
+      var amount = Math.floor(state.jackpot);
+      state.credits += amount;
+      state.jackpot = E.JACKPOT_SEED;
+      save();
+      $('bonusResult').textContent = '⛎ MEGA JACKPOT!';
+      wheelDone = 'mega';
+      setTimeout(function () { $('bonus').hidden = true; openMega(amount); }, 1100);
+      return;
+    }
+    var win = slice.mult * totalBet();
+    state.credits += win;
+    save();
+    $('bonusResult').textContent = E.BY_ID[slice.id].name + ' ×' + slice.mult + ' — +' + win.toLocaleString();
+    audio.win(true, slice.mult);
+    wheelDone = 'win';
+    btn.textContent = 'Collect';
+    btn.disabled = false;
+    btn.focus();
+    say('Zodiac Wheel: ' + E.BY_ID[slice.id].name + ' ×' + slice.mult + ' — +' + win.toLocaleString(), 'win big');
+    els.lastWin.textContent = win.toLocaleString();
+    if (els.auto.checked || freeSpins > 0) setTimeout(function () { if (!$('bonus').hidden) closeWheel(); }, 3000);
+  }
+
+  function closeWheel() {
+    $('bonus').hidden = true;
+    finishBonus();
+  }
+
+  function finishBonus() {
+    bonusActive = false;
+    wheelDone = null;
+    updateMeters();
+    els.spin.focus();
+    continueAuto(900);
+  }
+
+  // ---------- Mega Jackpot celebration ----------
+  var confettiStop = null;
+  function openMega(amount) {
+    var box = $('mega');
+    box.hidden = false;
+    box.classList.remove('flash'); void box.offsetWidth; box.classList.add('flash');
+    say('⛎ MEGA JACKPOT! +' + amount.toLocaleString(), 'win big');
+    els.lastWin.textContent = amount.toLocaleString();
+    audio.mega();
+    confettiStop = confetti($('confetti'));
+    var start = performance.now(), dur = reduceMotion ? 1 : 3500, el = $('megaAmount');
+    (function count(now) {
+      var t = Math.min(1, (now - start) / dur), eased = 1 - Math.pow(1 - t, 3);
+      el.textContent = '+' + Math.floor(amount * eased).toLocaleString();
+      if (t < 1 && !box.hidden) requestAnimationFrame(count);
+    })(start);
+    $('megaCollect').focus();
+    if (els.auto.checked || freeSpins > 0) setTimeout(function () { if (!box.hidden) closeMega(); }, 9000);
+  }
+  function closeMega() {
+    $('mega').hidden = true;
+    if (confettiStop) { confettiStop(); confettiStop = null; }
+    finishBonus();
+  }
+
+  // Coins, rainbow sparks and neon firework bursts on a full-screen canvas.
+  function confetti(cv) {
+    var cx = cv.getContext('2d'), dpr = Math.min(window.devicePixelRatio || 1, 2), w, h, parts = [], running = true, last = performance.now();
+    function size() { w = cv.clientWidth; h = cv.clientHeight; cv.width = w * dpr; cv.height = h * dpr; cx.setTransform(dpr, 0, 0, dpr, 0, 0); }
+    size();
+    function coin() {
+      parts.push({ k: 'coin', x: Math.random() * w, y: -20, vx: (Math.random() - .5) * 60, vy: 80 + Math.random() * 160,
+        r: 7 + Math.random() * 6, spin: Math.random() * 6, vs: 4 + Math.random() * 6, life: 99 });
+    }
+    function burst(x, y) {
+      var hue = Math.random() * 360, n = 46;
+      for (var i = 0; i < n; i++) {
+        var a = i / n * Math.PI * 2, sp = 120 + Math.random() * 180;
+        parts.push({ k: 'spark', x: x, y: y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, hue: (hue + i * 8) % 360, life: 1.2 + Math.random() * .6, age: 0 });
+      }
+    }
+    var nextBurst = 0, t0 = last;
+    function frame(now) {
+      if (!running) return;
+      var dt = Math.min(.05, (now - last) / 1000); last = now;
+      var elapsed = (now - t0) / 1000;
+      if (elapsed < 7) { for (var c = 0; c < 3; c++) if (Math.random() < .6) coin(); }
+      if (elapsed > nextBurst && elapsed < 8) { burst(w * (.15 + Math.random() * .7), h * (.12 + Math.random() * .4)); nextBurst = elapsed + .35 + Math.random() * .5; }
+      cx.clearRect(0, 0, w, h);
+      cx.globalCompositeOperation = 'lighter';
+      parts = parts.filter(function (p) {
+        p.x += p.vx * dt; p.y += p.vy * dt;
+        if (p.k === 'coin') {
+          p.vy += 260 * dt; p.spin += p.vs * dt;
+          var sx = Math.abs(Math.cos(p.spin));
+          cx.save(); cx.translate(p.x, p.y); cx.scale(Math.max(.15, sx), 1);
+          var g = cx.createRadialGradient(-p.r * .3, -p.r * .3, 1, 0, 0, p.r);
+          g.addColorStop(0, '#fffbe0'); g.addColorStop(.5, '#ffd700'); g.addColorStop(1, '#b8860b');
+          cx.fillStyle = g; cx.shadowColor = '#ffe600'; cx.shadowBlur = 12;
+          cx.beginPath(); cx.arc(0, 0, p.r, 0, 6.283); cx.fill();
+          cx.restore();
+          return p.y < h + 30;
+        }
+        p.age += dt; p.vx *= .985; p.vy = p.vy * .985 + 120 * dt;
+        var a = Math.max(0, 1 - p.age / p.life);
+        cx.fillStyle = 'hsla(' + p.hue + ',100%,65%,' + a + ')';
+        cx.shadowColor = 'hsl(' + p.hue + ',100%,60%)'; cx.shadowBlur = 10;
+        cx.beginPath(); cx.arc(p.x, p.y, 2.4, 0, 6.283); cx.fill();
+        return p.age < p.life;
+      });
+      cx.globalCompositeOperation = 'source-over'; cx.shadowBlur = 0;
+      requestAnimationFrame(frame);
+    }
+    if (!reduceMotion) requestAnimationFrame(frame);
+    window.addEventListener('resize', size);
+    return function () { running = false; window.removeEventListener('resize', size); cx.clearRect(0, 0, w, h); };
+  }
+
+  // ---------- demo controls ----------
+  function armDemo() {
+    els.forceEclipse.classList.toggle('armed', forced === 'eclipse');
+    els.forceMega.classList.toggle('armed', forced === 'mega');
   }
 
   var MISSES = [
@@ -441,6 +661,40 @@
         coinShower(1, 120, 4.5, 0.04);
         sparkle(1, 80, 5, 0.025);
       },
+      // Cosmic Eclipse: the light drains away with a deep rumble, then a
+      // shimmering swell and a burst of sparkles as the wheel appears.
+      eclipse: function () {
+        if (!ready()) return;
+        voice(220, 0, 1.4, { vol: 0.08, glide: 55, type: 'sawtooth', rev: 0.8 });
+        noise(0, 1.4, 4000, 150, 0.12, { type: 'lowpass', attack: 0.3, rev: 0.8 });
+        boom(0.9, 1.1);
+        [60, 67, 71, 74, 78].forEach(function (m, i) {
+          voice(hz(m), 1.0 + i * 0.06, 1.6, { vol: 0.03, attack: 0.3, type: 'triangle', vib: [6, 10], rev: 1 });
+        });
+        sparkle(1.0, 30, 1.2, 0.03);
+      },
+      // Wheel: a ratchet click for every slice passed, slowing with the wheel.
+      wheel: function (dur, slices) {
+        if (!ready()) return;
+        var n = Math.min(slices, 90);
+        for (var i = 1; i <= n; i++) {
+          var t = dur * (1 - Math.pow(1 - i / n, 1 / 3)) * 0.98;
+          noise(t, 0.03, 3500, 2500, 0.07, { q: 3, rev: 0.2 });
+          voice(1800, t, 0.03, { vol: 0.03, type: 'square', rev: 0.1 });
+        }
+        noise(0, 0.6, 500, 4000, 0.06, { q: 1.2, rev: 0.5 });
+      },
+      // Mega Jackpot: everything at once, and then more of it.
+      mega: function () {
+        if (!ready()) return;
+        this.jackpot();
+        boom(0, 2);
+        for (var i = 0; i < 6; i++) firework(4 + i * 0.5 + Math.random() * 0.3, rand(0.9, 1.4));
+        coinShower(4, 100, 4, 0.04);
+        for (var k = 0; k < 8; k++) kaching(4.2 + k * 0.35, 0.045);
+        brass([67, 72, 76, 79, 84], 7.2, 2, 0.055);
+        sparkle(4, 60, 4, 0.025);
+      },
       // Free spins: a whirling tone that flies out and back, then a sparkle pop.
       portal: function () {
         if (!ready()) return;
@@ -459,14 +713,15 @@
     var S = E.BY_ID, P = E.PAYS;
     var g = function (id) { return S[id].glyph; };
     var rows = [
-      [g('ophiuchus') + g('ophiuchus') + g('ophiuchus'), 'Serpent Bearer Jackpot', P.jackpot],
+      [g('sun') + g('moon') + g('ophiuchus'), 'Cosmic Eclipse → Zodiac Wheel', 'BONUS'],
+      [g('ophiuchus') + g('ophiuchus') + g('ophiuchus'), 'Serpent Bearer Triple', P.serpent],
       [g('sun') + g('sun') + g('sun'), 'Solar Alignment', P.sun],
       [g('moon') + g('moon') + g('moon'), 'Lunar Alignment', P.moon],
       [g('scorpio') + g('scorpio') + g('scorpio'), 'Any sign, three times', P.sign],
       [g('aries') + g('leo') + g('sagittarius'), 'Elemental Trine', P.trine]
     ];
     $('paytable').innerHTML = rows.map(function (r) {
-      return '<tr><td class="gl">' + r[0] + '</td><td>' + r[1] + '</td><td class="x">×' + r[2] + '</td></tr>';
+      return '<tr><td class="gl">' + r[0] + '</td><td>' + r[1] + '</td><td class="x">' + (typeof r[2] === 'number' ? '×' + r[2] : r[2]) + '</td></tr>';
     }).join('');
     $('fsAward').textContent = E.FREE_SPINS_AWARD;
 
@@ -525,6 +780,10 @@
   els.betDown.addEventListener('click', function () { state.betIdx = Math.max(0, state.betIdx - 1); save(); updateMeters(); });
   els.linesUp.addEventListener('click', function () { state.lines = Math.min(E.PAYLINES.length, state.lines + 1); save(); updateMeters(); });
   els.linesDown.addEventListener('click', function () { state.lines = Math.max(1, state.lines - 1); save(); updateMeters(); });
+  $('wheelSpin').addEventListener('click', spinWheel);
+  $('megaCollect').addEventListener('click', closeMega);
+  els.forceEclipse.addEventListener('click', function () { forced = forced === 'eclipse' ? null : 'eclipse'; armDemo(); });
+  els.forceMega.addEventListener('click', function () { forced = forced === 'mega' ? null : 'mega'; armDemo(); });
   els.auto.addEventListener('change', function () { if (els.auto.checked && !spinning) spin(); });
   els.sound.checked = state.sound !== false;
   els.sound.addEventListener('change', function () { state.sound = els.sound.checked; save(); audio.sync(); });
@@ -533,7 +792,7 @@
   // Browsers only allow audio after a user gesture; start the ambience on the first one.
   document.addEventListener('pointerdown', function first() { audio.unlock(); document.removeEventListener('pointerdown', first); });
   els.reset.addEventListener('click', function () {
-    if (spinning) return;
+    if (spinning || bonusActive) return;
     state.credits = START_CREDITS; freeSpins = 0; save(); updateMeters(0);
     say('Your stardust has been replenished.');
   });

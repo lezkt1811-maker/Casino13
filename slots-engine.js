@@ -35,15 +35,33 @@
 
   // Multipliers are per line, applied to the bet per line.
   var PAYS = {
-    jackpot: 1000,  // three Ophiuchus on a line
-    sun: 150,       // three Suns (Ophiuchus substitutes)
-    moon: 80,       // three Moons
-    sign: 35,       // three of the same sign
-    trine: 5        // three different signs of one element — an "Elemental Trine"
+    serpent: 1000,  // three Ophiuchus on a line
+    sun: 130,       // three Suns (Ophiuchus substitutes)
+    moon: 70,       // three Moons
+    sign: 28,       // three of the same sign
+    trine: 4        // three different signs of one element — an "Elemental Trine"
   };
 
   var FREE_SPINS_SCATTER = 3; // Ophiuchus anywhere on the grid
   var FREE_SPINS_AWARD = 5;
+
+  // ---- Cosmic Eclipse bonus ----
+  // Sun, Moon and Ophiuchus together on an active payline (any order) opens the
+  // Zodiac Wheel. Its 13 slices follow the true-sky ecliptic; landing on the
+  // Ophiuchus slice wins the progressive Mega Jackpot. Other slices pay a
+  // multiple of the total bet.
+  var ECLIPSE = ['sun', 'moon', 'ophiuchus'];
+  var WHEEL = [
+    { id: 'aries', mult: 10 }, { id: 'taurus', mult: 25 }, { id: 'gemini', mult: 15 },
+    { id: 'cancer', mult: 50 }, { id: 'leo', mult: 20 }, { id: 'virgo', mult: 30 },
+    { id: 'libra', mult: 15 }, { id: 'scorpio', mult: 100 }, { id: 'ophiuchus', jackpot: true },
+    { id: 'sagittarius', mult: 75 }, { id: 'capricorn', mult: 20 }, { id: 'aquarius', mult: 40 },
+    { id: 'pisces', mult: 10 }
+  ];
+  var JACKPOT_SEED = 1000;        // credits the Mega Jackpot resets to
+  var JACKPOT_CONTRIBUTION = 0.02; // share of every paid bet added to the pool
+
+  function spinWheel(rng) { return Math.floor((rng || Math.random)() * WHEEL.length); }
 
   var ROWS = 3, REELS = 3;
 
@@ -79,7 +97,7 @@
 
   function evaluateLine(syms) {
     var natural = syms.filter(function (s) { return !s.wild; });
-    if (natural.length === 0) return { kind: 'jackpot', mult: PAYS.jackpot, label: 'Serpent Bearer Jackpot' };
+    if (natural.length === 0) return { kind: 'serpent', mult: PAYS.serpent, label: 'Serpent Bearer Triple' };
 
     var first = natural[0];
     var allSame = natural.every(function (s) { return s.id === first.id; });
@@ -112,7 +130,15 @@
     var scatter = 0;
     grid.forEach(function (col) { col.forEach(function (s) { if (s.wild) scatter++; }); });
     var freeSpins = scatter >= FREE_SPINS_SCATTER ? FREE_SPINS_AWARD : 0;
-    return { wins: wins, total: total, scatter: scatter, freeSpins: freeSpins };
+
+    var eclipse = null;
+    for (var j = 0; j < lines && !eclipse; j++) {
+      var ids = PAYLINES[j].rows.map(function (row, reel) { return grid[reel][row].id; });
+      if (ECLIPSE.every(function (id) { return ids.indexOf(id) !== -1; })) {
+        eclipse = { line: j, name: PAYLINES[j].name, rows: PAYLINES[j].rows };
+      }
+    }
+    return { wins: wins, total: total, scatter: scatter, freeSpins: freeSpins, eclipse: eclipse };
   }
 
   function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
@@ -121,6 +147,8 @@
     SYMBOLS: SYMBOLS, BY_ID: BY_ID, PAYS: PAYS, PAYLINES: PAYLINES,
     ROWS: ROWS, REELS: REELS,
     FREE_SPINS_SCATTER: FREE_SPINS_SCATTER, FREE_SPINS_AWARD: FREE_SPINS_AWARD,
+    WHEEL: WHEEL, ECLIPSE: ECLIPSE, JACKPOT_SEED: JACKPOT_SEED, JACKPOT_CONTRIBUTION: JACKPOT_CONTRIBUTION,
+    spinWheel: spinWheel,
     randomSymbol: randomSymbol, spinGrid: spinGrid,
     evaluateLine: evaluateLine, evaluate: evaluate
   };
