@@ -16,10 +16,10 @@ It is plain HTML, CSS and JavaScript with no build step. Open `index.html` in a 
 
 Every sound is made live in the browser with the Web Audio API, with no audio files. The effects are all sparkles, fireworks and coins.
 
-- **Cosmos (ambience):** soft sparkles drifting in and out, with no background hum. Switch it off with the Cosmos toggle.
+- **Cosmos (ambience):** off by default, so the game is silent between spins. Tick Cosmos for occasional soft sparkles.
 - **Spin:** a magic swoosh that leaves a trail of glitter.
-- **Reel stops:** a solid thud and a puff of sparkles, with more sparkles on each reel.
-- **Wins:** an arcade *ka-ching* and a spill of coins that gets bigger with the size of the win.
+- **Reel stops:** a short, dry thud and a few sparkles.
+- **Wins:** a cash-register *ka-ching*, then a slot-machine hopper pours coins into the tray while the Win meter counts up. Bigger wins pour for longer.
 - **Big wins:** fireworks (a whistle up, a bang and a crackle), 90s anime brass hits, and more coins and sparkles.
 - **Jackpot:** a huge blast, a barrage of six fireworks, a brass fanfare and an avalanche of more than a hundred coins.
 - **Free spins:** a whirling tone that flies out and back, then a sparkling pop.

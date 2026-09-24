@@ -76,6 +76,18 @@
     drawLines(null);
   }
 
+  // Count the Win meter up from 0 while the coins pour out.
+  var rollTimer = null;
+  function rollUp(amount, dur) {
+    cancelAnimationFrame(rollTimer);
+    var start = performance.now(), ms = reduceMotion ? 1 : dur * 1000;
+    (function tick(now) {
+      var t = Math.min(1, (now - start) / ms);
+      els.lastWin.textContent = Math.round(amount * t).toLocaleString();
+      if (t < 1) rollTimer = requestAnimationFrame(tick);
+    })(start);
+  }
+
   function say(text, cls) {
     els.message.textContent = text;
     els.message.className = 'message' + (cls ? ' ' + cls : '');
@@ -191,7 +203,9 @@
     } else if (res.total > 0) {
       var big = res.total >= totalBet() * 10;
       say(parts.join(' · ') + ' — +' + res.total.toLocaleString(), 'win' + (big ? ' big' : ''));
-      audio.win(big, res.total / totalBet());
+      var rollDur = Math.min(3, 0.6 + (res.total / totalBet()) * 0.12);
+      rollUp(res.total, rollDur);
+      audio.win(big, res.total / totalBet(), rollDur);
     } else if (!res.freeSpins && !res.eclipse) {
       say(pickMiss());
       audio.miss();
@@ -292,13 +306,13 @@
     state.credits += win;
     save();
     $('bonusResult').textContent = E.BY_ID[slice.id].name + ' ×' + slice.mult + ' — +' + win.toLocaleString();
-    audio.win(true, slice.mult);
+    rollUp(win, 2.5);
+    audio.win(true, slice.mult, 2.5);
     wheelDone = 'win';
     btn.textContent = 'Collect';
     btn.disabled = false;
     btn.focus();
     say('Zodiac Wheel: ' + E.BY_ID[slice.id].name + ' ×' + slice.mult + ' — +' + win.toLocaleString(), 'win big');
-    els.lastWin.textContent = win.toLocaleString();
     if (els.auto.checked || freeSpins > 0) setTimeout(function () { if (!$('bonus').hidden) closeWheel(); }, 3000);
   }
 
@@ -506,29 +520,42 @@
       vol = vol || 0.03;
       for (var i = 0; i < count; i++) {
         var f = hz(step(88, Math.floor(Math.random() * 10))), t = at + Math.random() * spread;
-        voice(f, t, 0.12, { vol: vol, glide: f * 1.6, glideTime: 0.05, rev: 0.9, echo: 0.3 });
-        noise(t, 0.08, 9000, 12000, vol * 0.5, { type: 'highpass', rev: 0.8 });
+        voice(f, t, 0.12, { vol: vol, glide: f * 1.6, glideTime: 0.05, rev: 0.4, echo: 0.15 });
       }
     }
 
     // ---- coins ----
-    // Arcade "ka-ching": two quick bright square-wave blips.
+    // Cash-register "ka-ching": a bright blip into a ringing cha-ching.
     function kaching(at, vol) {
-      vol = vol || 0.05;
-      voice(988, at, 0.07, { type: 'square', vol: vol, rev: 0.2 });
-      voice(1319, at + 0.07, 0.4, { type: 'square', vol: vol, hold: 0.06, rev: 0.3, echo: 0.1 });
+      vol = vol || 0.07;
+      voice(1568, at, 0.06, { type: 'square', vol: vol * 0.8, rev: 0.1 });
+      voice(2093, at + 0.06, 0.45, { type: 'square', vol: vol, hold: 0.08, rev: 0.2 });
+      clink(at + 0.06, vol * 1.2);
+      clink(at + 0.1, vol);
     }
-    // A single metal coin hitting a pile: a sharp, very short click-and-ring.
+    // One metal coin landing in a tray: a click plus a few short, bright
+    // inharmonic partials that die away within a fifth of a second.
     function clink(at, vol) {
-      vol = vol || 0.04;
-      var f = rand(3200, 5200);
-      noise(at, 0.03, 7000, 5000, vol * 1.4, { type: 'highpass', rev: 0.2 });
-      voice(f, at, 0.07, { vol: vol, type: 'triangle', rev: 0.2 });
-      voice(f * 1.47, at, 0.05, { vol: vol * 0.6, rev: 0.2 });
+      vol = vol || 0.07;
+      var f = rand(2300, 3400);
+      noise(at, 0.015, 8000, 6000, vol * 1.5, { type: 'highpass', rev: 0.05 });
+      [[1, 1, 0.2], [1.58, 0.6, 0.15], [2.31, 0.45, 0.1], [3.12, 0.3, 0.06]].forEach(function (pt) {
+        voice(f * pt[0], at, pt[2], { vol: vol * pt[1], rev: 0.12 });
+      });
+    }
+    // Slot-machine hopper payout: coins dropping in a steady, slightly
+    // irregular stream (about 14 a second) for as long as the win rolls up.
+    function coinDrop(at, dur, vol) {
+      var t = at;
+      while (t < at + dur) {
+        clink(t, (vol || 0.07) * rand(0.7, 1));
+        if (Math.random() < 0.25) clink(t + rand(0.02, 0.04), (vol || 0.07) * 0.6);
+        t += rand(0.055, 0.09);
+      }
     }
     // A pour of coins; density thins out toward the end like a real spill.
     function coinShower(at, count, dur, vol) {
-      for (var i = 0; i < count; i++) clink(at + dur * Math.pow(Math.random(), 1.6), (vol || 0.035) * rand(0.5, 1));
+      for (var i = 0; i < count; i++) clink(at + dur * Math.pow(Math.random(), 1.6), (vol || 0.06) * rand(0.5, 1));
     }
 
     // ---- explosions ----
@@ -609,26 +636,29 @@
       // Reel stop: a solid thud with a puff of sparkles.
       stop: function (c) {
         if (!ready()) return;
-        voice(120, 0, 0.25, { vol: 0.25, glide: 50, rev: 0.2 });
-        noise(0, 0.08, 3000, 800, 0.08, { type: 'lowpass', rev: 0.3 });
-        sparkle(0.02, 4 + c * 2, 0.2, 0.022);
+        voice(160, 0, 0.12, { vol: 0.18, glide: 70, rev: 0 });
+        noise(0, 0.05, 3000, 900, 0.07, { type: 'lowpass', rev: 0 });
+        sparkle(0.02, 2 + c, 0.15, 0.02);
       },
       miss: function () {
         if (!ready()) return;
         noise(0, 0.5, 2500, 400, 0.04, { q: 1, attack: 0.1, rev: 0.6 });
       },
       // Wins: ka-ching plus a coin spill sized to the win; big wins get fireworks.
-      win: function (big, times) {
+      // Wins: ka-ching, then a hopper of coins pouring out while the Win meter
+      // rolls up. Big wins add fireworks and brass over the coins.
+      win: function (big, times, dur) {
         if (!ready()) return;
-        times = Math.max(1, times || 1);
-        kaching(0, 0.05);
-        coinShower(0.15, Math.min(60, 6 + Math.round(times * 4)), Math.min(2.5, 0.5 + times * 0.2), 0.035);
-        sparkle(0.1, 16, 1.2, 0.028);
+        dur = dur || 1;
+        kaching(0, 0.07);
+        coinDrop(0.3, dur, 0.07);
+        sparkle(0.1, 5, 0.8, 0.02);
         if (big) {
-          brass([64, 71, 76, 79], 0, 0.8, 0.045);
-          firework(0.2, 1);
-          firework(0.9, 0.8);
-          kaching(0.5, 0.045); kaching(0.8, 0.045);
+          brass([64, 71, 76, 79], 0, 0.8, 0.04);
+          firework(0.4, 0.8);
+          firework(1.2, 0.7);
+          kaching(dur + 0.3, 0.07);
+          coinShower(0.5, 40, dur, 0.05);
         }
       },
       // Jackpot: a barrage of fireworks, a giant blast and an avalanche of coins.
@@ -641,8 +671,9 @@
         brass([62, 69, 74, 78], 0.74, 0.16, 0.05);
         brass([67, 72, 76, 79, 84], 0.96, 1.4, 0.055);
         for (var i = 0; i < 6; i++) firework(0.6 + i * 0.55 + Math.random() * 0.2, rand(0.8, 1.3));
-        for (var k = 0; k < 6; k++) kaching(0.9 + k * 0.4, 0.045);
-        coinShower(1, 120, 4.5, 0.04);
+        for (var k = 0; k < 6; k++) kaching(0.9 + k * 0.4, 0.07);
+        coinDrop(1, 4.5, 0.07);
+        coinShower(1, 120, 4.5, 0.055);
         sparkle(1, 80, 5, 0.025);
       },
       // Cosmic Eclipse: the light drains away with a deep rumble, then a
@@ -674,8 +705,9 @@
         this.jackpot();
         boom(0, 2);
         for (var i = 0; i < 6; i++) firework(4 + i * 0.5 + Math.random() * 0.3, rand(0.9, 1.4));
-        coinShower(4, 100, 4, 0.04);
-        for (var k = 0; k < 8; k++) kaching(4.2 + k * 0.35, 0.045);
+        coinDrop(4, 4, 0.07);
+        coinShower(4, 100, 4, 0.055);
+        for (var k = 0; k < 8; k++) kaching(4.2 + k * 0.35, 0.07);
         brass([67, 72, 76, 79, 84], 7.2, 2, 0.055);
         sparkle(4, 60, 4, 0.025);
       },
@@ -771,8 +803,8 @@
   els.auto.addEventListener('change', function () { if (els.auto.checked && !spinning) spin(); });
   els.sound.checked = state.sound !== false;
   els.sound.addEventListener('change', function () { state.sound = els.sound.checked; save(); audio.sync(); });
-  els.ambience.checked = state.ambience !== false;
-  els.ambience.addEventListener('change', function () { state.ambience = els.ambience.checked; save(); audio.sync(); });
+  els.ambience.checked = state.ambience2 === true;
+  els.ambience.addEventListener('change', function () { state.ambience2 = els.ambience.checked; save(); audio.sync(); });
   // Browsers only allow audio after a user gesture; start the ambience on the first one.
   document.addEventListener('pointerdown', function first() { audio.unlock(); document.removeEventListener('pointerdown', first); });
   els.reset.addEventListener('click', function () {
