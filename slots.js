@@ -185,12 +185,17 @@
   ];
   function pickMiss() { return MISSES[Math.floor(Math.random() * MISSES.length)]; }
 
-  // ---------- audio: a small cosmic WebAudio synth, no sound files ----------
+  // ---------- audio: a magical-girl style WebAudio synth, no sound files ----------
+  // Everything here is original: music-box melodies, harp sweeps, sparkles and
+  // anime-style synth brass, all in the bright C Lydian mode.
   var audio = (function () {
     var ctx = null, master, dry, reverbIn, echoIn, noiseBuf;
-    var drone = null, twinkleTimer = null;
-    // A minor pentatonic across several octaves: nothing ever clashes.
-    var SCALE = [220, 261.63, 293.66, 329.63, 392, 440, 523.25, 587.33, 659.25, 783.99, 880, 1046.5, 1174.66, 1318.51, 1567.98, 1760];
+    var pad = null, twinkleTimer = null, lullabyTimer = null;
+    var LYDIAN = [0, 2, 4, 6, 7, 9, 11];
+
+    function hz(m) { return 440 * Math.pow(2, (m - 69) / 12); }
+    // The nth note of C Lydian counting up from `from` (a MIDI note on C).
+    function step(from, n) { return from + 12 * Math.floor(n / 7) + LYDIAN[n % 7]; }
 
     function soundOn() { return els.sound.checked; }
     function ambienceOn() { return soundOn() && els.ambience.checked; }
@@ -212,20 +217,19 @@
       master.connect(comp); comp.connect(ctx.destination);
       dry = ctx.createGain(); dry.connect(master);
 
-      // Long, dark "space hall" reverb from a decaying stereo noise impulse.
-      var len = ctx.sampleRate * 4.5, ir = ctx.createBuffer(2, len, ctx.sampleRate);
+      // Big, bright hall reverb from a decaying stereo noise impulse.
+      var len = ctx.sampleRate * 3.5, ir = ctx.createBuffer(2, len, ctx.sampleRate);
       for (var ch = 0; ch < 2; ch++) {
         var d = ir.getChannelData(ch);
-        for (var i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3.2);
+        for (var i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2.6);
       }
       var conv = ctx.createConvolver(); conv.buffer = ir;
-      reverbIn = ctx.createGain(); reverbIn.gain.value = 0.7;
+      reverbIn = ctx.createGain(); reverbIn.gain.value = 0.6;
       reverbIn.connect(conv); conv.connect(master);
 
-      // Ping-pong-ish echo with a darkening feedback loop.
       var delay = ctx.createDelay(2), fb = ctx.createGain(), lp = ctx.createBiquadFilter();
-      delay.delayTime.value = 0.38; fb.gain.value = 0.42; lp.type = 'lowpass'; lp.frequency.value = 2600;
-      echoIn = ctx.createGain(); echoIn.gain.value = 0.5;
+      delay.delayTime.value = 0.28; fb.gain.value = 0.38; lp.type = 'lowpass'; lp.frequency.value = 4500;
+      echoIn = ctx.createGain(); echoIn.gain.value = 0.45;
       echoIn.connect(delay); delay.connect(lp); lp.connect(fb); fb.connect(delay);
       lp.connect(reverbIn); lp.connect(master);
 
@@ -234,7 +238,6 @@
       for (var j = 0; j < nd.length; j++) nd[j] = Math.random() * 2 - 1;
     }
 
-    // Route a node to dry, reverb and echo buses.
     function out(node, rev, echo) {
       node.connect(dry);
       if (rev) { var r = ctx.createGain(); r.gain.value = rev; node.connect(r); r.connect(reverbIn); }
@@ -246,22 +249,77 @@
       var osc = ctx.createOscillator(), g = ctx.createGain(), t = ctx.currentTime + at;
       osc.type = o.type || 'sine';
       osc.frequency.setValueAtTime(freq, t);
-      if (o.glide) osc.frequency.exponentialRampToValueAtTime(o.glide, t + len);
+      if (o.glide) osc.frequency.exponentialRampToValueAtTime(o.glide, t + (o.glideTime || len));
+      if (o.glide2) osc.frequency.exponentialRampToValueAtTime(o.glide2, t + len);
       if (o.detune) osc.detune.value = o.detune;
+      if (o.vib) {
+        var lfo = ctx.createOscillator(), amt = ctx.createGain();
+        lfo.frequency.value = o.vib[0]; amt.gain.value = o.vib[1];
+        lfo.connect(amt); amt.connect(osc.detune); lfo.start(t); lfo.stop(t + len + 0.05);
+      }
       g.gain.setValueAtTime(0.0001, t);
       g.gain.exponentialRampToValueAtTime(o.vol || 0.1, t + (o.attack || 0.005));
+      if (o.hold) g.gain.setValueAtTime(o.vol || 0.1, t + o.hold);
       g.gain.exponentialRampToValueAtTime(0.0001, t + len);
-      osc.connect(g); out(g, o.rev == null ? 0.6 : o.rev, o.echo || 0);
+      osc.connect(g); out(g, o.rev == null ? 0.5 : o.rev, o.echo || 0);
       osc.start(t); osc.stop(t + len + 0.05);
     }
 
-    // Glass/crystal bell: inharmonic partials with fast decay on the upper ones.
-    function bell(freq, at, vol, echo) {
+    // Music box: a pure tine with a bright metallic overtone and quick decay.
+    function musicBox(m, at, vol, echo) {
       vol = vol || 0.08;
-      voice(freq, at, 2.8, { vol: vol, rev: 0.8, echo: echo || 0 });
-      voice(freq * 2.76, at, 1.2, { vol: vol * 0.35, rev: 0.8, echo: echo || 0 });
-      voice(freq * 5.4, at, 0.5, { vol: vol * 0.15, rev: 0.9 });
-      voice(freq * 1.003, at, 2.8, { vol: vol * 0.5, rev: 0.8, type: 'triangle' }); // slow beating shimmer
+      var f = hz(m);
+      voice(f, at, 1.6, { vol: vol, rev: 0.55, echo: echo || 0.2 });
+      voice(f * 4.02, at, 0.35, { vol: vol * 0.25, rev: 0.6 });
+      voice(f * 2, at, 0.8, { vol: vol * 0.2, rev: 0.6, type: 'triangle' });
+    }
+
+    // Harp: plucked triangle with a soft octave, used for glissandos.
+    function harp(m, at, vol) {
+      var f = hz(m);
+      voice(f, at, 1.4, { vol: vol || 0.05, type: 'triangle', rev: 0.7, echo: 0.15 });
+      voice(f * 2, at, 0.6, { vol: (vol || 0.05) * 0.3, rev: 0.7 });
+    }
+    function gliss(fromStep, toStep, at, dur, vol) {
+      var n = Math.abs(toStep - fromStep), dir = toStep > fromStep ? 1 : -1;
+      for (var i = 0; i <= n; i++) harp(step(48, fromStep + i * dir), at + dur * i / n, vol);
+    }
+
+    // "Kira" sparkle: tiny very high pings that flick upward.
+    function sparkle(at, count, spread, vol) {
+      for (var i = 0; i < count; i++) {
+        var f = hz(step(84, Math.floor(Math.random() * 10)));
+        voice(f, at + Math.random() * spread, 0.35, { vol: vol || 0.03, glide: f * 1.5, glideTime: 0.08, rev: 0.9, echo: 0.3 });
+      }
+    }
+
+    // Chime tree: a fast descending cascade of bright bells.
+    function chimeTree(at, vol) {
+      for (var i = 0; i < 16; i++) {
+        var f = hz(step(84, 15 - i));
+        voice(f, at + i * 0.045, 1.2, { vol: vol || 0.03, rev: 0.9, echo: 0.2 });
+        voice(f * 2.76, at + i * 0.045, 0.3, { vol: (vol || 0.03) * 0.3, rev: 0.9 });
+      }
+    }
+
+    // 90s anime synth brass: detuned saws through a filter that blooms open.
+    function brass(notes, at, len, vol) {
+      var t = ctx.currentTime + at, lp = ctx.createBiquadFilter(), g = ctx.createGain();
+      lp.type = 'lowpass'; lp.Q.value = 3;
+      lp.frequency.setValueAtTime(500, t);
+      lp.frequency.exponentialRampToValueAtTime(3800, t + 0.08);
+      lp.frequency.exponentialRampToValueAtTime(1400, t + len);
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(vol || 0.05, t + 0.03);
+      g.gain.setValueAtTime(vol || 0.05, t + len * 0.7);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + len);
+      lp.connect(g); out(g, 0.5, 0.1);
+      notes.forEach(function (m) {
+        [-9, 9].forEach(function (d) {
+          var o = ctx.createOscillator(); o.type = 'sawtooth'; o.frequency.value = hz(m); o.detune.value = d;
+          o.connect(lp); o.start(t); o.stop(t + len + 0.05);
+        });
+      });
     }
 
     function noise(at, len, from, to, vol, q) {
@@ -272,41 +330,57 @@
       g.gain.setValueAtTime(0.0001, t);
       g.gain.exponentialRampToValueAtTime(vol, t + len * 0.4);
       g.gain.exponentialRampToValueAtTime(0.0001, t + len);
-      src.connect(bp); bp.connect(g); out(g, 0.9, 0.2);
+      src.connect(bp); bp.connect(g); out(g, 0.8, 0.2);
       src.start(t); src.stop(t + len + 0.05);
     }
 
-    function pick(lo, hi) { return SCALE[lo + Math.floor(Math.random() * (hi - lo))]; }
+    // A short original melody: [midi, beat] pairs played on the music box.
+    function melody(notes, at, beat, vol) {
+      var t = at;
+      notes.forEach(function (n) { if (n[0]) musicBox(n[0], t, vol); t += n[1] * beat; });
+      return t;
+    }
+    var WIN_TUNE = [[76, 1], [79, 1], [83, 1], [88, 2], [86, 1], [83, 1], [91, 3]];
+    var BIG_TUNE = [[72, 1], [76, 1], [79, 1], [84, 2], [83, 1], [79, 1], [83, 2], [86, 1], [88, 1], [90, 1], [91, 4]];
+    var LULLABY = [[72, 2], [79, 2], [76, 2], [83, 3], [81, 1], [79, 2], [78, 2], [79, 4]];
 
-    // ---- ambience: a slow drone plus distant twinkling stars ----
+    // ---- ambience: a dreamy moonlit pad, twinkles, and a music-box lullaby ----
     function syncAmbience() {
       if (!ctx) return;
-      if (ambienceOn() && !drone) startDrone();
-      if (!ambienceOn() && drone) stopDrone();
+      if (ambienceOn() && !pad) startPad();
+      if (!ambienceOn() && pad) stopPad();
     }
-    function startDrone() {
-      var g = ctx.createGain(), lp = ctx.createBiquadFilter(), lfo = ctx.createOscillator(), lfoAmt = ctx.createGain();
-      lp.type = 'lowpass'; lp.frequency.value = 500; lp.Q.value = 6;
-      lfo.frequency.value = 0.05; lfoAmt.gain.value = 350; lfo.connect(lfoAmt); lfoAmt.connect(lp.frequency);
-      var oscs = [[55, 'sawtooth', -6], [55, 'sawtooth', 7], [82.41, 'triangle', 0], [110, 'sine', 3]].map(function (v) {
-        var o = ctx.createOscillator(); o.frequency.value = v[0]; o.type = v[1]; o.detune.value = v[2]; o.connect(lp); o.start(); return o;
+    function startPad() {
+      var g = ctx.createGain(), lp = ctx.createBiquadFilter(), trem = ctx.createOscillator(), tremAmt = ctx.createGain();
+      lp.type = 'lowpass'; lp.frequency.value = 1400;
+      trem.frequency.value = 0.18; tremAmt.gain.value = 0.008; trem.connect(tremAmt); tremAmt.connect(g.gain);
+      // Cmaj7(#11): the dreamy, floating "magic" chord.
+      var oscs = [48, 55, 64, 71, 78].map(function (m, i) {
+        var o = ctx.createOscillator(); o.type = i < 2 ? 'sine' : 'triangle'; o.frequency.value = hz(m); o.detune.value = (i % 2 ? 5 : -5);
+        o.connect(lp); o.start(); return o;
       });
       lp.connect(g); out(g, 1, 0);
       g.gain.setValueAtTime(0.0001, ctx.currentTime);
-      g.gain.exponentialRampToValueAtTime(0.035, ctx.currentTime + 4);
-      lfo.start();
-      drone = { g: g, nodes: oscs.concat([lfo]) };
+      g.gain.exponentialRampToValueAtTime(0.02, ctx.currentTime + 4);
+      trem.start();
+      pad = { g: g, nodes: oscs.concat([trem]) };
       (function twinkle() {
-        if (!drone) return;
-        bell(pick(9, SCALE.length), 0, 0.012 + Math.random() * 0.012, 0.6);
-        twinkleTimer = setTimeout(twinkle, 900 + Math.random() * 2600);
+        if (!pad) return;
+        if (Math.random() < 0.5) sparkle(0, 1 + Math.floor(Math.random() * 3), 0.4, 0.012);
+        else musicBox(step(84, Math.floor(Math.random() * 8)), 0, 0.015, 0.5);
+        twinkleTimer = setTimeout(twinkle, 1000 + Math.random() * 2500);
+      })();
+      (function lullaby() {
+        if (!pad) return;
+        if (!spinning) melody(LULLABY, 0, 0.32, 0.02);
+        lullabyTimer = setTimeout(lullaby, 18000 + Math.random() * 12000);
       })();
     }
-    function stopDrone() {
-      var d = drone; drone = null; clearTimeout(twinkleTimer);
-      d.g.gain.cancelScheduledValues(ctx.currentTime);
-      d.g.gain.setTargetAtTime(0.0001, ctx.currentTime, 0.4);
-      setTimeout(function () { d.nodes.forEach(function (n) { n.stop(); }); }, 2500);
+    function stopPad() {
+      var p = pad; pad = null; clearTimeout(twinkleTimer); clearTimeout(lullabyTimer);
+      p.g.gain.cancelScheduledValues(ctx.currentTime);
+      p.g.gain.setTargetAtTime(0.0001, ctx.currentTime, 0.4);
+      setTimeout(function () { p.nodes.forEach(function (n) { n.stop(); }); }, 2500);
     }
 
     function ready() { return ctx && soundOn(); }
@@ -318,49 +392,65 @@
         master.gain.setTargetAtTime(soundOn() ? 0.9 : 0, ctx.currentTime, 0.1);
         syncAmbience();
       },
-      // Spin start: a rising nebula whoosh with a sweeping tone underneath.
+      // Spin: a magic-wand swish — quick harp sweep up with a sparkle trail.
       spin: function () {
         if (!ready()) return;
-        noise(0, 1.1, 250, 5000, 0.18, 2.5);
-        voice(110, 0, 1.2, { vol: 0.05, glide: 440, type: 'triangle', rev: 0.8 });
+        gliss(14, 24, 0, 0.3, 0.04);
+        noise(0, 0.6, 3000, 9000, 0.06, 4);
+        sparkle(0.2, 6, 0.6, 0.025);
       },
-      // Each reel lands with a soft low pulse and a crystal chime, rising per reel.
+      // Reel stop: a music-box note, rising per reel, with a twinkle.
       stop: function (c) {
         if (!ready()) return;
-        voice(90, 0, 0.35, { vol: 0.14, glide: 45, rev: 0.3 });
-        bell([659.25, 783.99, 987.77][c] || 880, 0, 0.07, 0.25);
+        musicBox([84, 88, 91][c] || 91, 0, 0.08);
+        sparkle(0.02, 2, 0.1, 0.02);
       },
       miss: function () {
         if (!ready()) return;
-        voice(329.63, 0, 1.6, { vol: 0.03, glide: 293.66, rev: 1 });
+        musicBox(79, 0.05, 0.035); musicBox(76, 0.3, 0.03);
       },
-      // Wins: an ascending pentatonic star-cascade; big wins add a sparkle shower.
+      // Wins: a music-box tune and a chime tree; big wins add a brass fanfare.
       win: function (big) {
         if (!ready()) return;
-        var n = big ? 10 : 5;
-        for (var i = 0; i < n; i++) bell(SCALE[6 + i], i * 0.09, 0.07, 0.35);
         if (big) {
-          for (var k = 0; k < 24; k++) bell(pick(10, SCALE.length) * 2, 0.8 + k * 0.06 + Math.random() * 0.05, 0.025, 0.4);
-          noise(0.6, 2.5, 2000, 9000, 0.06, 6);
+          brass([60, 67, 72, 76], 0, 0.18, 0.045);
+          brass([62, 69, 74, 78], 0.22, 0.18, 0.045);
+          brass([64, 71, 76, 79], 0.44, 0.9, 0.05);
+          melody(BIG_TUNE, 0.5, 0.13, 0.08);
+          chimeTree(2.3, 0.03);
+          sparkle(0.5, 20, 2.5, 0.022);
+        } else {
+          melody(WIN_TUNE, 0, 0.11, 0.08);
+          chimeTree(0.9, 0.02);
         }
       },
-      // Jackpot: a deep cosmic gong, a choir-like pad chord and a meteor shower.
+      // Jackpot: a full transformation sequence — harp sweep, glowing chord,
+      // brass hits, then the big tune under a storm of sparkles.
       jackpot: function () {
         if (!ready()) return;
-        [55, 55 * 2.4, 55 * 3.9, 55 * 5.3].forEach(function (f, i) { voice(f, 0, 6 - i, { vol: 0.12 / (i + 1), rev: 1 }); });
-        [220, 277.18, 329.63, 440, 554.37].forEach(function (f, i) {
-          voice(f, 0.3, 5, { vol: 0.03, attack: 1.2, type: 'sawtooth', detune: (i % 2 ? 8 : -8), rev: 1 });
+        gliss(0, 21, 0, 1.2, 0.05);
+        noise(0, 1.4, 400, 8000, 0.08, 2);
+        [60, 64, 67, 71, 78, 84].forEach(function (m, i) {
+          voice(hz(m), 0.4, 5, { vol: 0.025, attack: 1, hold: 3, type: i < 3 ? 'triangle' : 'sine', vib: [5, 6], rev: 1 });
         });
-        this.win(true);
-        for (var k = 0; k < 16; k++) voice(3000 + Math.random() * 3000, 1 + k * 0.18, 0.6, { vol: 0.02, glide: 400, rev: 1, echo: 0.3 });
+        brass([60, 67, 72, 76], 1.4, 0.16, 0.05);
+        brass([60, 67, 72, 76], 1.62, 0.16, 0.05);
+        brass([62, 69, 74, 78], 1.84, 0.16, 0.05);
+        brass([67, 72, 76, 79, 84], 2.06, 1.4, 0.055);
+        melody(BIG_TUNE, 2.3, 0.13, 0.09);
+        chimeTree(1.3, 0.03);
+        chimeTree(4.1, 0.03);
+        sparkle(0.2, 40, 5, 0.022);
       },
-      // Free spins: a swirling portal opening.
+      // Free spins: a spinning tiara — a whirling tone that flies out and back.
       portal: function () {
         if (!ready()) return;
-        voice(1400, 0, 2.2, { vol: 0.05, glide: 180, type: 'triangle', rev: 1, echo: 0.4 });
-        voice(1410, 0.05, 2.2, { vol: 0.05, glide: 175, rev: 1, echo: 0.4 });
-        noise(0, 2, 6000, 300, 0.1, 8);
-        for (var i = 0; i < 6; i++) bell(SCALE[15 - i], 1 + i * 0.12, 0.05, 0.4);
+        voice(700, 0, 1.6, { vol: 0.04, glide: 1800, glideTime: 0.8, glide2: 700, vib: [14, 40], rev: 0.8, echo: 0.3 });
+        voice(704, 0, 1.6, { vol: 0.03, glide: 1810, glideTime: 0.8, glide2: 705, type: 'triangle', vib: [11, 30], rev: 0.8 });
+        noise(0, 0.8, 1500, 7000, 0.05, 6);
+        noise(0.8, 0.8, 7000, 1500, 0.05, 6);
+        gliss(24, 10, 1.4, 0.5, 0.04);
+        sparkle(0, 14, 2, 0.022);
       }
     };
   })();
