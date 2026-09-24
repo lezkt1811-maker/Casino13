@@ -157,7 +157,7 @@
     } else if (res.total > 0) {
       var big = res.total >= totalBet() * 10;
       say(parts.join(' · ') + ' — +' + res.total.toLocaleString(), 'win' + (big ? ' big' : ''));
-      audio.win(big);
+      audio.win(big, res.total / totalBet());
     } else if (!res.freeSpins) {
       say(pickMiss());
       audio.miss();
@@ -185,17 +185,15 @@
   ];
   function pickMiss() { return MISSES[Math.floor(Math.random() * MISSES.length)]; }
 
-  // ---------- audio: a magical-girl style WebAudio synth, no sound files ----------
-  // Everything here is original: music-box melodies, harp sweeps, sparkles and
-  // anime-style synth brass, all in the bright C Lydian mode.
+  // ---------- audio: sparkles, fireworks and coins — a WebAudio synth, no sound files ----------
   var audio = (function () {
     var ctx = null, master, dry, reverbIn, echoIn, noiseBuf;
-    var pad = null, twinkleTimer = null, lullabyTimer = null;
+    var pad = null, twinkleTimer = null;
     var LYDIAN = [0, 2, 4, 6, 7, 9, 11];
 
     function hz(m) { return 440 * Math.pow(2, (m - 69) / 12); }
-    // The nth note of C Lydian counting up from `from` (a MIDI note on C).
     function step(from, n) { return from + 12 * Math.floor(n / 7) + LYDIAN[n % 7]; }
+    function rand(a, b) { return a + Math.random() * (b - a); }
 
     function soundOn() { return els.sound.checked; }
     function ambienceOn() { return soundOn() && els.ambience.checked; }
@@ -212,24 +210,23 @@
 
     function build() {
       var comp = ctx.createDynamicsCompressor();
-      comp.threshold.value = -14; comp.ratio.value = 4;
+      comp.threshold.value = -12; comp.ratio.value = 5;
       master = ctx.createGain(); master.gain.value = 0.9;
       master.connect(comp); comp.connect(ctx.destination);
       dry = ctx.createGain(); dry.connect(master);
 
-      // Big, bright hall reverb from a decaying stereo noise impulse.
-      var len = ctx.sampleRate * 3.5, ir = ctx.createBuffer(2, len, ctx.sampleRate);
+      var len = ctx.sampleRate * 3, ir = ctx.createBuffer(2, len, ctx.sampleRate);
       for (var ch = 0; ch < 2; ch++) {
         var d = ir.getChannelData(ch);
-        for (var i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2.6);
+        for (var i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2.8);
       }
       var conv = ctx.createConvolver(); conv.buffer = ir;
-      reverbIn = ctx.createGain(); reverbIn.gain.value = 0.6;
+      reverbIn = ctx.createGain(); reverbIn.gain.value = 0.55;
       reverbIn.connect(conv); conv.connect(master);
 
       var delay = ctx.createDelay(2), fb = ctx.createGain(), lp = ctx.createBiquadFilter();
-      delay.delayTime.value = 0.28; fb.gain.value = 0.38; lp.type = 'lowpass'; lp.frequency.value = 4500;
-      echoIn = ctx.createGain(); echoIn.gain.value = 0.45;
+      delay.delayTime.value = 0.25; fb.gain.value = 0.35; lp.type = 'lowpass'; lp.frequency.value = 5000;
+      echoIn = ctx.createGain(); echoIn.gain.value = 0.4;
       echoIn.connect(delay); delay.connect(lp); lp.connect(fb); fb.connect(delay);
       lp.connect(reverbIn); lp.connect(master);
 
@@ -251,7 +248,6 @@
       osc.frequency.setValueAtTime(freq, t);
       if (o.glide) osc.frequency.exponentialRampToValueAtTime(o.glide, t + (o.glideTime || len));
       if (o.glide2) osc.frequency.exponentialRampToValueAtTime(o.glide2, t + len);
-      if (o.detune) osc.detune.value = o.detune;
       if (o.vib) {
         var lfo = ctx.createOscillator(), amt = ctx.createGain();
         lfo.frequency.value = o.vib[0]; amt.gain.value = o.vib[1];
@@ -261,48 +257,81 @@
       g.gain.exponentialRampToValueAtTime(o.vol || 0.1, t + (o.attack || 0.005));
       if (o.hold) g.gain.setValueAtTime(o.vol || 0.1, t + o.hold);
       g.gain.exponentialRampToValueAtTime(0.0001, t + len);
-      osc.connect(g); out(g, o.rev == null ? 0.5 : o.rev, o.echo || 0);
+      osc.connect(g); out(g, o.rev == null ? 0.4 : o.rev, o.echo || 0);
       osc.start(t); osc.stop(t + len + 0.05);
     }
 
-    // Music box: a pure tine with a bright metallic overtone and quick decay.
-    function musicBox(m, at, vol, echo) {
-      vol = vol || 0.08;
-      var f = hz(m);
-      voice(f, at, 1.6, { vol: vol, rev: 0.55, echo: echo || 0.2 });
-      voice(f * 4.02, at, 0.35, { vol: vol * 0.25, rev: 0.6 });
-      voice(f * 2, at, 0.8, { vol: vol * 0.2, rev: 0.6, type: 'triangle' });
+    // Filtered noise burst. type: 'bandpass' | 'lowpass' | 'highpass'.
+    function noise(at, len, from, to, vol, o) {
+      o = o || {};
+      var src = ctx.createBufferSource(), f = ctx.createBiquadFilter(), g = ctx.createGain(), t = ctx.currentTime + at;
+      src.buffer = noiseBuf; src.loop = true;
+      src.playbackRate.value = o.rate || 1;
+      f.type = o.type || 'bandpass'; f.Q.value = o.q || 1;
+      f.frequency.setValueAtTime(from, t); f.frequency.exponentialRampToValueAtTime(to, t + len);
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(vol, t + (o.attack || 0.004));
+      g.gain.exponentialRampToValueAtTime(0.0001, t + len);
+      src.connect(f); f.connect(g); out(g, o.rev == null ? 0.5 : o.rev, o.echo || 0);
+      src.start(t, Math.random() * 1.5); src.stop(t + len + 0.05);
     }
 
-    // Harp: plucked triangle with a soft octave, used for glissandos.
-    function harp(m, at, vol) {
-      var f = hz(m);
-      voice(f, at, 1.4, { vol: vol || 0.05, type: 'triangle', rev: 0.7, echo: 0.15 });
-      voice(f * 2, at, 0.6, { vol: (vol || 0.05) * 0.3, rev: 0.7 });
-    }
-    function gliss(fromStep, toStep, at, dur, vol) {
-      var n = Math.abs(toStep - fromStep), dir = toStep > fromStep ? 1 : -1;
-      for (var i = 0; i <= n; i++) harp(step(48, fromStep + i * dir), at + dur * i / n, vol);
-    }
-
-    // "Kira" sparkle: tiny very high pings that flick upward.
+    // ---- sparkles ----
+    // A glittery "kira": tiny high pings flicking upward, plus a hiss of fairy dust.
     function sparkle(at, count, spread, vol) {
+      vol = vol || 0.03;
       for (var i = 0; i < count; i++) {
-        var f = hz(step(84, Math.floor(Math.random() * 10)));
-        voice(f, at + Math.random() * spread, 0.35, { vol: vol || 0.03, glide: f * 1.5, glideTime: 0.08, rev: 0.9, echo: 0.3 });
+        var f = hz(step(88, Math.floor(Math.random() * 10))), t = at + Math.random() * spread;
+        voice(f, t, 0.12, { vol: vol, glide: f * 1.6, glideTime: 0.05, rev: 0.9, echo: 0.3 });
+        noise(t, 0.08, 9000, 12000, vol * 0.5, { type: 'highpass', rev: 0.8 });
       }
     }
 
-    // Chime tree: a fast descending cascade of bright bells.
-    function chimeTree(at, vol) {
-      for (var i = 0; i < 16; i++) {
-        var f = hz(step(84, 15 - i));
-        voice(f, at + i * 0.045, 1.2, { vol: vol || 0.03, rev: 0.9, echo: 0.2 });
-        voice(f * 2.76, at + i * 0.045, 0.3, { vol: (vol || 0.03) * 0.3, rev: 0.9 });
-      }
+    // ---- coins ----
+    // Arcade "ka-ching": two quick bright square-wave blips.
+    function kaching(at, vol) {
+      vol = vol || 0.05;
+      voice(988, at, 0.07, { type: 'square', vol: vol, rev: 0.2 });
+      voice(1319, at + 0.07, 0.4, { type: 'square', vol: vol, hold: 0.06, rev: 0.3, echo: 0.1 });
+    }
+    // A single metal coin hitting a pile: a sharp, very short click-and-ring.
+    function clink(at, vol) {
+      vol = vol || 0.04;
+      var f = rand(3200, 5200);
+      noise(at, 0.03, 7000, 5000, vol * 1.4, { type: 'highpass', rev: 0.2 });
+      voice(f, at, 0.07, { vol: vol, type: 'triangle', rev: 0.2 });
+      voice(f * 1.47, at, 0.05, { vol: vol * 0.6, rev: 0.2 });
+    }
+    // A pour of coins; density thins out toward the end like a real spill.
+    function coinShower(at, count, dur, vol) {
+      for (var i = 0; i < count; i++) clink(at + dur * Math.pow(Math.random(), 1.6), (vol || 0.035) * rand(0.5, 1));
     }
 
-    // 90s anime synth brass: detuned saws through a filter that blooms open.
+    // ---- explosions ----
+    function boom(at, size) {
+      size = size || 1;
+      noise(at, 1.2 * size, 2500, 60, 0.35 * Math.min(size, 1.4), { type: 'lowpass', q: 0.7, rev: 0.7, rate: 0.6 });
+      voice(90, at, 0.9 * size, { vol: 0.4 * Math.min(size, 1.3), glide: 28, rev: 0.4 });
+      noise(at, 0.25, 6000, 1500, 0.12, { type: 'bandpass', q: 0.8, rev: 0.6 }); // initial crack
+    }
+    // Firework crackle: dozens of tiny pops scattered after the burst.
+    function crackle(at, count, dur, vol) {
+      for (var i = 0; i < count; i++) {
+        var t = at + Math.random() * dur, f = rand(1500, 6000);
+        noise(t, 0.035, f, f * 0.8, (vol || 0.08) * rand(0.4, 1), { type: 'bandpass', q: 2, rev: 0.7 });
+      }
+    }
+    // A full firework: whistle up, bang, crackle and sparkle rain.
+    function firework(at, size) {
+      var up = rand(0.55, 0.8);
+      voice(rand(500, 700), at, up, { vol: 0.03, glide: rand(2200, 3000), vib: [18, 30], rev: 0.6 });
+      noise(at, up, 800, 3000, 0.04, { q: 4, rev: 0.5 });
+      boom(at + up, size || 1);
+      crackle(at + up + 0.15, 30, 1.6, 0.07);
+      sparkle(at + up + 0.1, 12, 1.4, 0.025);
+    }
+
+    // 90s anime synth brass hits.
     function brass(notes, at, len, vol) {
       var t = ctx.currentTime + at, lp = ctx.createBiquadFilter(), g = ctx.createGain();
       lp.type = 'lowpass'; lp.Q.value = 3;
@@ -322,29 +351,7 @@
       });
     }
 
-    function noise(at, len, from, to, vol, q) {
-      var src = ctx.createBufferSource(), bp = ctx.createBiquadFilter(), g = ctx.createGain(), t = ctx.currentTime + at;
-      src.buffer = noiseBuf; src.loop = true;
-      bp.type = 'bandpass'; bp.Q.value = q || 3;
-      bp.frequency.setValueAtTime(from, t); bp.frequency.exponentialRampToValueAtTime(to, t + len);
-      g.gain.setValueAtTime(0.0001, t);
-      g.gain.exponentialRampToValueAtTime(vol, t + len * 0.4);
-      g.gain.exponentialRampToValueAtTime(0.0001, t + len);
-      src.connect(bp); bp.connect(g); out(g, 0.8, 0.2);
-      src.start(t); src.stop(t + len + 0.05);
-    }
-
-    // A short original melody: [midi, beat] pairs played on the music box.
-    function melody(notes, at, beat, vol) {
-      var t = at;
-      notes.forEach(function (n) { if (n[0]) musicBox(n[0], t, vol); t += n[1] * beat; });
-      return t;
-    }
-    var WIN_TUNE = [[76, 1], [79, 1], [83, 1], [88, 2], [86, 1], [83, 1], [91, 3]];
-    var BIG_TUNE = [[72, 1], [76, 1], [79, 1], [84, 2], [83, 1], [79, 1], [83, 2], [86, 1], [88, 1], [90, 1], [91, 4]];
-    var LULLABY = [[72, 2], [79, 2], [76, 2], [83, 3], [81, 1], [79, 2], [78, 2], [79, 4]];
-
-    // ---- ambience: a dreamy moonlit pad, twinkles, and a music-box lullaby ----
+    // ---- ambience: a soft starlit pad with drifting sparkles ----
     function syncAmbience() {
       if (!ctx) return;
       if (ambienceOn() && !pad) startPad();
@@ -352,32 +359,25 @@
     }
     function startPad() {
       var g = ctx.createGain(), lp = ctx.createBiquadFilter(), trem = ctx.createOscillator(), tremAmt = ctx.createGain();
-      lp.type = 'lowpass'; lp.frequency.value = 1400;
-      trem.frequency.value = 0.18; tremAmt.gain.value = 0.008; trem.connect(tremAmt); tremAmt.connect(g.gain);
-      // Cmaj7(#11): the dreamy, floating "magic" chord.
+      lp.type = 'lowpass'; lp.frequency.value = 1200;
+      trem.frequency.value = 0.18; tremAmt.gain.value = 0.007; trem.connect(tremAmt); tremAmt.connect(g.gain);
       var oscs = [48, 55, 64, 71, 78].map(function (m, i) {
         var o = ctx.createOscillator(); o.type = i < 2 ? 'sine' : 'triangle'; o.frequency.value = hz(m); o.detune.value = (i % 2 ? 5 : -5);
         o.connect(lp); o.start(); return o;
       });
       lp.connect(g); out(g, 1, 0);
       g.gain.setValueAtTime(0.0001, ctx.currentTime);
-      g.gain.exponentialRampToValueAtTime(0.02, ctx.currentTime + 4);
+      g.gain.exponentialRampToValueAtTime(0.018, ctx.currentTime + 4);
       trem.start();
       pad = { g: g, nodes: oscs.concat([trem]) };
       (function twinkle() {
         if (!pad) return;
-        if (Math.random() < 0.5) sparkle(0, 1 + Math.floor(Math.random() * 3), 0.4, 0.012);
-        else musicBox(step(84, Math.floor(Math.random() * 8)), 0, 0.015, 0.5);
-        twinkleTimer = setTimeout(twinkle, 1000 + Math.random() * 2500);
-      })();
-      (function lullaby() {
-        if (!pad) return;
-        if (!spinning) melody(LULLABY, 0, 0.32, 0.02);
-        lullabyTimer = setTimeout(lullaby, 18000 + Math.random() * 12000);
+        sparkle(0, 2 + Math.floor(Math.random() * 4), 0.8, 0.012);
+        twinkleTimer = setTimeout(twinkle, 700 + Math.random() * 1800);
       })();
     }
     function stopPad() {
-      var p = pad; pad = null; clearTimeout(twinkleTimer); clearTimeout(lullabyTimer);
+      var p = pad; pad = null; clearTimeout(twinkleTimer);
       p.g.gain.cancelScheduledValues(ctx.currentTime);
       p.g.gain.setTargetAtTime(0.0001, ctx.currentTime, 0.4);
       setTimeout(function () { p.nodes.forEach(function (n) { n.stop(); }); }, 2500);
@@ -392,65 +392,60 @@
         master.gain.setTargetAtTime(soundOn() ? 0.9 : 0, ctx.currentTime, 0.1);
         syncAmbience();
       },
-      // Spin: a magic-wand swish — quick harp sweep up with a sparkle trail.
+      // Spin: a magic swoosh trailing glitter.
       spin: function () {
         if (!ready()) return;
-        gliss(14, 24, 0, 0.3, 0.04);
-        noise(0, 0.6, 3000, 9000, 0.06, 4);
-        sparkle(0.2, 6, 0.6, 0.025);
+        noise(0, 0.7, 600, 9000, 0.12, { q: 1.5, attack: 0.25, rev: 0.6 });
+        sparkle(0.1, 12, 0.8, 0.028);
       },
-      // Reel stop: a music-box note, rising per reel, with a twinkle.
+      // Reel stop: a solid thud with a puff of sparkles.
       stop: function (c) {
         if (!ready()) return;
-        musicBox([84, 88, 91][c] || 91, 0, 0.08);
-        sparkle(0.02, 2, 0.1, 0.02);
+        voice(120, 0, 0.25, { vol: 0.25, glide: 50, rev: 0.2 });
+        noise(0, 0.08, 3000, 800, 0.08, { type: 'lowpass', rev: 0.3 });
+        sparkle(0.02, 4 + c * 2, 0.2, 0.022);
       },
       miss: function () {
         if (!ready()) return;
-        musicBox(79, 0.05, 0.035); musicBox(76, 0.3, 0.03);
+        noise(0, 0.5, 2500, 400, 0.04, { q: 1, attack: 0.1, rev: 0.6 });
       },
-      // Wins: a music-box tune and a chime tree; big wins add a brass fanfare.
-      win: function (big) {
+      // Wins: ka-ching plus a coin spill sized to the win; big wins get fireworks.
+      win: function (big, times) {
         if (!ready()) return;
+        times = Math.max(1, times || 1);
+        kaching(0, 0.05);
+        coinShower(0.15, Math.min(60, 6 + Math.round(times * 4)), Math.min(2.5, 0.5 + times * 0.2), 0.035);
+        sparkle(0.1, 16, 1.2, 0.028);
         if (big) {
-          brass([60, 67, 72, 76], 0, 0.18, 0.045);
-          brass([62, 69, 74, 78], 0.22, 0.18, 0.045);
-          brass([64, 71, 76, 79], 0.44, 0.9, 0.05);
-          melody(BIG_TUNE, 0.5, 0.13, 0.08);
-          chimeTree(2.3, 0.03);
-          sparkle(0.5, 20, 2.5, 0.022);
-        } else {
-          melody(WIN_TUNE, 0, 0.11, 0.08);
-          chimeTree(0.9, 0.02);
+          brass([64, 71, 76, 79], 0, 0.8, 0.045);
+          firework(0.2, 1);
+          firework(0.9, 0.8);
+          kaching(0.5, 0.045); kaching(0.8, 0.045);
         }
       },
-      // Jackpot: a full transformation sequence — harp sweep, glowing chord,
-      // brass hits, then the big tune under a storm of sparkles.
+      // Jackpot: a barrage of fireworks, a giant blast and an avalanche of coins.
       jackpot: function () {
         if (!ready()) return;
-        gliss(0, 21, 0, 1.2, 0.05);
-        noise(0, 1.4, 400, 8000, 0.08, 2);
-        [60, 64, 67, 71, 78, 84].forEach(function (m, i) {
-          voice(hz(m), 0.4, 5, { vol: 0.025, attack: 1, hold: 3, type: i < 3 ? 'triangle' : 'sine', vib: [5, 6], rev: 1 });
-        });
-        brass([60, 67, 72, 76], 1.4, 0.16, 0.05);
-        brass([60, 67, 72, 76], 1.62, 0.16, 0.05);
-        brass([62, 69, 74, 78], 1.84, 0.16, 0.05);
-        brass([67, 72, 76, 79, 84], 2.06, 1.4, 0.055);
-        melody(BIG_TUNE, 2.3, 0.13, 0.09);
-        chimeTree(1.3, 0.03);
-        chimeTree(4.1, 0.03);
-        sparkle(0.2, 40, 5, 0.022);
+        boom(0, 1.6);
+        sparkle(0, 40, 1.5, 0.03);
+        brass([60, 67, 72, 76], 0.3, 0.16, 0.05);
+        brass([60, 67, 72, 76], 0.52, 0.16, 0.05);
+        brass([62, 69, 74, 78], 0.74, 0.16, 0.05);
+        brass([67, 72, 76, 79, 84], 0.96, 1.4, 0.055);
+        for (var i = 0; i < 6; i++) firework(0.6 + i * 0.55 + Math.random() * 0.2, rand(0.8, 1.3));
+        for (var k = 0; k < 6; k++) kaching(0.9 + k * 0.4, 0.045);
+        coinShower(1, 120, 4.5, 0.04);
+        sparkle(1, 80, 5, 0.025);
       },
-      // Free spins: a spinning tiara — a whirling tone that flies out and back.
+      // Free spins: a whirling tone that flies out and back, then a sparkle pop.
       portal: function () {
         if (!ready()) return;
         voice(700, 0, 1.6, { vol: 0.04, glide: 1800, glideTime: 0.8, glide2: 700, vib: [14, 40], rev: 0.8, echo: 0.3 });
-        voice(704, 0, 1.6, { vol: 0.03, glide: 1810, glideTime: 0.8, glide2: 705, type: 'triangle', vib: [11, 30], rev: 0.8 });
-        noise(0, 0.8, 1500, 7000, 0.05, 6);
-        noise(0.8, 0.8, 7000, 1500, 0.05, 6);
-        gliss(24, 10, 1.4, 0.5, 0.04);
-        sparkle(0, 14, 2, 0.022);
+        noise(0, 0.8, 1500, 7000, 0.05, { q: 6 });
+        noise(0.8, 0.8, 7000, 1500, 0.05, { q: 6 });
+        boom(1.6, 0.6);
+        crackle(1.7, 25, 1, 0.06);
+        sparkle(0, 30, 2.4, 0.025);
       }
     };
   })();

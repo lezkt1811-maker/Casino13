@@ -12,19 +12,17 @@ It is plain HTML, CSS and JavaScript with no build step. Open `index.html` in a 
 - Pick a bet per line (1, 2, 5, 10 or 25) and the number of lines, then press **Spin** (or Space).
 - You start with 1,000 stardust. **Refill stardust** resets you to 1,000.
 
-## Magical sound
+## Sound
 
-Every sound is made live in the browser with the Web Audio API, with no audio files. The style is inspired by 90s magical-girl anime, and every melody and effect is original.
+Every sound is made live in the browser with the Web Audio API, with no audio files. The effects are all sparkles, fireworks and coins.
 
-- **Cosmos (ambience):** a dreamy, moonlit chord with twinkling sparkles, plus a soft music-box lullaby now and then. Switch it off with the Cosmos toggle.
-- **Spin:** a magic-wand swish, made of a quick harp sweep and a sparkle trail.
-- **Reel stops:** a music-box note for each reel, rising in pitch, with a twinkle.
-- **Wins:** a short music-box tune and a cascade of chimes.
-- **Big wins:** anime synth-brass hits, a longer tune and a shower of sparkles.
-- **Jackpot:** a full transformation sequence: a harp sweep, a glowing chord, brass hits, the victory tune and a storm of sparkles.
-- **Free spins:** a whirling tone that flies out and back, with sparkles.
-
-Everything is in the bright C Lydian mode and plays through a large hall reverb and a soft echo.
+- **Cosmos (ambience):** a soft, starlit chord with glitter drifting in and out. Switch it off with the Cosmos toggle.
+- **Spin:** a magic swoosh that leaves a trail of glitter.
+- **Reel stops:** a solid thud and a puff of sparkles, with more sparkles on each reel.
+- **Wins:** an arcade *ka-ching* and a spill of coins that gets bigger with the size of the win.
+- **Big wins:** fireworks (a whistle up, a bang and a crackle), 90s anime brass hits, and more coins and sparkles.
+- **Jackpot:** a huge blast, a barrage of six fireworks, a brass fanfare and an avalanche of more than a hundred coins.
+- **Free spins:** a whirling tone that flies out and back, then a sparkling pop.
 
 ## Paytable (per line × bet per line)
 
@@ -52,7 +50,7 @@ node simulate.js 5000000
 | `index.html` | Page markup |
 | `slots.css` | Black-and-gold celestial theme  |
 | `slots-engine.js` | Pure game logic: symbols, weights, paylines, payouts. Works in the browser and in Node |
-| `slots.js` | Reel animation, controls, magical Web Audio synth, starfield background |
+| `slots.js` | Reel animation, controls, Web Audio sound effects, starfield background |
 | `simulate.js` | Monte Carlo return-to-player check |
 
 ## Run locally
