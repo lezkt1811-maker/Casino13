@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Serpent Bearer Slots</title>
+<meta name="description" content="A free-play 13-sign astrology slot machine demo featuring Ophiuchus, the Serpent Bearer. No real money.">
+<meta name="theme-color" content="#000000">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22%3E%3Ctext y=%22.9em%22 font-size=%2290%22 fill=%22%23ffd700%22%3E%E2%9B%8E%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700;900&family=Cinzel+Decorative:wght@700;900&family=Raleway:wght@400;700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="slots.css">
+</head>
+<body>
+<canvas id="sky" aria-hidden="true"></canvas>
+
+<main class="wrap">
+  <header class="head">
+    <div class="oph-mark" aria-hidden="true">&#x26CE;&#xFE0E;</div>
+    <h1>Serpent Bearer Slots</h1>
+    <p class="tag">A 13-sign astrology slot machine &middot; free-play demo</p>
+  </header>
+
+  <section class="machine" aria-label="Slot machine">
+    <div class="meters">
+      <div class="meter"><span>Stardust</span><b id="credits">0</b></div>
+      <div class="meter"><span>Bet</span><b id="totalBet">0</b></div>
+      <div class="meter"><span>Win</span><b id="lastWin">0</b></div>
+    </div>
+
+    <div class="cabinet">
+      <div class="free-banner" id="freeBanner" hidden>&#x26CE;&#xFE0E; Free spins: <b id="freeCount">0</b></div>
+      <div class="window" id="window">
+        <div class="reel" data-reel="0"><div class="strip"></div></div>
+        <div class="reel" data-reel="1"><div class="strip"></div></div>
+        <div class="reel" data-reel="2"><div class="strip"></div></div>
+        <svg class="lines" id="lines" viewBox="0 0 300 300" preserveAspectRatio="none" aria-hidden="true"></svg>
+      </div>
+      <p class="message" id="message" role="status" aria-live="polite">Align the heavens. Press Spin.</p>
+    </div>
+
+    <div class="controls">
+      <div class="stepper" aria-label="Bet per line">
+        <span class="lbl">Bet / line</span>
+        <button type="button" id="betDown" aria-label="Lower bet">&minus;</button>
+        <b id="bet">1</b>
+        <button type="button" id="betUp" aria-label="Raise bet">+</button>
+      </div>
+      <div class="stepper" aria-label="Paylines">
+        <span class="lbl">Lines</span>
+        <button type="button" id="linesDown" aria-label="Fewer lines">&minus;</button>
+        <b id="lineCount">5</b>
+        <button type="button" id="linesUp" aria-label="More lines">+</button>
+      </div>
+    </div>
+
+    <button type="button" class="spin" id="spin">Spin</button>
+
+    <div class="aux">
+      <label class="toggle"><input type="checkbox" id="auto"> Auto</label>
+      <label class="toggle"><input type="checkbox" id="sound" checked> Sound</label>
+      <button type="button" class="ghost" id="reset">Refill stardust</button>
+    </div>
+  </section>
+
+  <section class="card" aria-labelledby="payHead">
+    <h2 id="payHead">Celestial paytable</h2>
+    <p class="note">Wins are paid per line, times your bet per line.</p>
+    <table class="pays" id="paytable"></table>
+    <ul class="rules">
+      <li><b class="g">&#x26CE;&#xFE0E; Ophiuchus</b> is wild. It stands in for any sign, the Sun, or the Moon.</li>
+      <li>Three or more <b class="g">&#x26CE;&#xFE0E;</b> anywhere on the reels award <b id="fsAward">5</b> free spins.</li>
+      <li>An <b>Elemental Trine</b> is three signs of one element on a line: fire, earth, air, or water.</li>
+    </ul>
+  </section>
+
+  <section class="card" aria-labelledby="signHead">
+    <h2 id="signHead">The 13 signs</h2>
+    <p class="note">The Sun passes through Ophiuchus between Scorpius and Sagittarius, from about Nov 29 to Dec 17. This machine has a place for it.</p>
+    <div class="signs" id="signs"></div>
+  </section>
+
+  <footer class="foot">
+    <p>Demo only. Stardust has no cash value, cannot be bought, and cannot be redeemed.</p>
+  </footer>
+</main>
+
+<script src="slots-engine.js"></script>
+<script src="slots.js"></script>
+</body>
+</html>
