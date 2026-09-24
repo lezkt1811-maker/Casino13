@@ -19,7 +19,8 @@ Every sound is made live in the browser with the Web Audio API, with no audio fi
 - **Cosmos (ambience):** off by default, so the game is silent between spins. Tick Cosmos for occasional soft sparkles.
 - **Spin:** a magic swoosh that leaves a trail of glitter.
 - **Reel stops:** a short, dry thud and a few sparkles.
-- **Wins:** a cash-register *ka-ching*, then a slot-machine hopper pours coins into the tray while the Win meter counts up. Bigger wins pour for longer.
+- **Wins:** a cash-register *ka-ching*, then a slot-machine hopper pours coins clanking into a metal tray while the Win meter counts up. Now and then a coin bounces and spins out on its own. Bigger wins pour for longer.
+  The coin sounds are realistic clips rendered when the game loads: each coin rings with the frequencies of a thin metal disc, and each bounce comes faster than the last until the coin spins flat. There are still no audio files.
 - **Big wins:** fireworks (a whistle up, a bang and a crackle), 90s anime brass hits, and more coins and sparkles.
 - **Jackpot:** a huge blast, a barrage of six fireworks, a brass fanfare and an avalanche of more than a hundred coins.
 - **Free spins:** a whirling tone that flies out and back, then a sparkling pop.

@@ -441,6 +441,7 @@
       if (!ctx) {
         try { ctx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return; }
         build();
+        renderCoinBank();
       }
       if (ctx.state === 'suspended') ctx.resume();
       syncAmbience();
@@ -525,37 +526,123 @@
     }
 
     // ---- coins ----
-    // Cash-register "ka-ching": a bright blip into a ringing cha-ching.
-    function kaching(at, vol) {
-      vol = vol || 0.07;
-      voice(1568, at, 0.06, { type: 'square', vol: vol * 0.8, rev: 0.1 });
-      voice(2093, at + 0.06, 0.45, { type: 'square', vol: vol, hold: 0.08, rev: 0.2 });
-      clink(at + 0.06, vol * 1.2);
-      clink(at + 0.1, vol);
-    }
-    // One metal coin landing in a tray: a click plus a few short, bright
-    // inharmonic partials that die away within a fifth of a second.
-    function clink(at, vol) {
-      vol = vol || 0.07;
-      var f = rand(2300, 3400);
-      noise(at, 0.015, 8000, 6000, vol * 1.5, { type: 'highpass', rev: 0.05 });
-      [[1, 1, 0.2], [1.58, 0.6, 0.15], [2.31, 0.45, 0.1], [3.12, 0.3, 0.06]].forEach(function (pt) {
-        voice(f * pt[0], at, pt[2], { vol: vol * pt[1], rev: 0.12 });
+    // ---- coins ----
+    // Realistic coin sounds are pre-rendered once into a small bank of clips
+    // (OfflineAudioContext), then played back cheaply with random pitch.
+    //  - 'land':   a coin clanking into a metal payout tray
+    //  - 'bounce': a coin dropped on a hard surface — bounces that come faster
+    //              and faster, then the spinning rattle as it settles flat
+    // Each coin rings with the inharmonic modes of a thin metal disc, with
+    // slightly split mode pairs that give the shimmering "ching" of real coins.
+    var coinBank = { land: [], bounce: [] };
+
+    function renderCoinBank() {
+      if (!window.OfflineAudioContext) return;
+      var sr = ctx.sampleRate;
+      function one(kind) {
+        var len = kind === 'bounce' ? 1.6 : 0.8;
+        var oc = new OfflineAudioContext(1, Math.ceil(sr * len), sr);
+        var nb = oc.createBuffer(1, Math.ceil(sr * 0.03), sr), nd = nb.getChannelData(0);
+        for (var i = 0; i < nd.length; i++) nd[i] = Math.random() * 2 - 1;
+        function partial(t, f, amp, decay) {
+          var o = oc.createOscillator(), g = oc.createGain();
+          o.frequency.value = f;
+          g.gain.setValueAtTime(0, t);
+          g.gain.linearRampToValueAtTime(amp, t + 0.0015);
+          g.gain.exponentialRampToValueAtTime(0.0001, t + decay);
+          o.connect(g); g.connect(oc.destination);
+          o.start(t); o.stop(t + decay + 0.01);
+        }
+        function click(t, amp, hp) {
+          var src = oc.createBufferSource(), f = oc.createBiquadFilter(), g = oc.createGain();
+          src.buffer = nb; f.type = 'highpass'; f.frequency.value = hp || 2500;
+          g.gain.setValueAtTime(amp, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.012);
+          src.connect(f); f.connect(g); g.connect(oc.destination); src.start(t);
+        }
+        // A struck coin: thin-disc mode ratios, the first two split into pairs.
+        function coin(t, f, amp, ring) {
+          [[1, 1, 0.5], [1.72, 0.7, 0.34], [2.31, 0.5, 0.22], [3.07, 0.32, 0.14], [3.92, 0.2, 0.09]].forEach(function (m, k) {
+            partial(t, f * m[0], amp * m[1], m[2] * ring);
+            if (k < 2) partial(t, f * m[0] * 1.0035, amp * m[1] * 0.6, m[2] * ring);
+          });
+          click(t, amp * 0.9);
+        }
+        // A pressed-steel payout tray: low, short metallic clank.
+        function tray(t, amp) {
+          [[310, 1, 0.26], [742, 0.75, 0.2], [1190, 0.55, 0.15], [1960, 0.35, 0.1], [2870, 0.22, 0.07]].forEach(function (m) {
+            partial(t, m[0] * rand(0.97, 1.03), amp * m[1], m[2]);
+          });
+          click(t, amp * 0.8, 800);
+        }
+        var f = rand(3900, 6100);
+        if (kind === 'land') {
+          tray(0, 0.22);
+          coin(0, f, 0.28, 0.8);
+          coin(rand(0.035, 0.06), f, 0.12, 0.5);            // small rebound
+          if (Math.random() < 0.6) coin(rand(0.008, 0.02), rand(3900, 6100), 0.1, 0.4); // clacks another coin
+        } else {
+          var t = 0, gap = rand(0.11, 0.16), v = 0.34;
+          for (var b = 0; b < 5; b++) { coin(t, f, v, 1); t += gap; gap *= 0.62; v *= 0.64; }
+          var r = 0.042;
+          while (r > 0.007) { coin(t, f, v * 0.55, 0.22); t += r; r *= 0.84; }
+        }
+        return oc.startRendering();
+      }
+      ['land', 'land', 'land', 'land', 'land', 'land', 'land', 'land', 'bounce', 'bounce', 'bounce', 'bounce'].forEach(function (k) {
+        var pr = one(k);
+        if (pr && pr.then) pr.then(function (buf) { coinBank[k].push(buf); }).catch(function () {});
       });
     }
-    // Slot-machine hopper payout: coins dropping in a steady, slightly
-    // irregular stream (about 14 a second) for as long as the win rolls up.
+
+    function playCoin(kind, at, vol) {
+      var bank = coinBank[kind];
+      if (!bank.length) return false;
+      var src = ctx.createBufferSource(), g = ctx.createGain();
+      src.buffer = bank[Math.floor(Math.random() * bank.length)];
+      src.playbackRate.value = rand(0.9, 1.1);
+      g.gain.value = vol;
+      src.connect(g); out(g, 0.12, 0);
+      src.start(ctx.currentTime + at);
+      return true;
+    }
+
+    // One coin landing in the tray (falls back to a live-synth clink while the bank renders).
+    function clink(at, vol) {
+      vol = vol || 0.07;
+      if (playCoin('land', at, vol * 9)) return;
+      var f = rand(3900, 6100);
+      noise(at, 0.012, 8000, 6000, vol * 1.5, { type: 'highpass', rev: 0.05 });
+      [[1, 1, 0.3], [1.72, 0.7, 0.2], [2.31, 0.5, 0.13], [3.07, 0.32, 0.08]].forEach(function (pt) {
+        voice(f * pt[0], at, pt[2], { vol: vol * pt[1], rev: 0.1 });
+      });
+    }
+    function coinBounce(at, vol) { if (!playCoin('bounce', at, (vol || 0.07) * 9)) clink(at, vol); }
+
+    // Cash-register "ka-ching": a bright blip into a ringing cha-ching, with coins.
+    function kaching(at, vol) {
+      vol = vol || 0.07;
+      voice(1568, at, 0.06, { type: 'square', vol: vol * 0.6, rev: 0.1 });
+      voice(2093, at + 0.06, 0.4, { type: 'square', vol: vol * 0.75, hold: 0.07, rev: 0.2 });
+      clink(at + 0.06, vol * 1.2);
+      clink(at + 0.11, vol);
+    }
+    // Slot-machine hopper payout: coins clanking into the tray in a steady,
+    // slightly irregular stream (about 12 a second), with a coin now and then
+    // bouncing and spinning out on its own.
     function coinDrop(at, dur, vol) {
       var t = at;
+      vol = vol || 0.07;
       while (t < at + dur) {
-        clink(t, (vol || 0.07) * rand(0.7, 1));
-        if (Math.random() < 0.25) clink(t + rand(0.02, 0.04), (vol || 0.07) * 0.6);
-        t += rand(0.055, 0.09);
+        clink(t, vol * rand(0.65, 1));
+        if (Math.random() < 0.3) clink(t + rand(0.02, 0.045), vol * rand(0.4, 0.7));
+        if (Math.random() < 0.08) coinBounce(t + rand(0, 0.05), vol * 0.8);
+        t += rand(0.06, 0.1);
       }
+      coinBounce(at + dur + 0.05, vol);
     }
-    // A pour of coins; density thins out toward the end like a real spill.
+    // A loose spill of coins; density thins out toward the end.
     function coinShower(at, count, dur, vol) {
-      for (var i = 0; i < count; i++) clink(at + dur * Math.pow(Math.random(), 1.6), (vol || 0.06) * rand(0.5, 1));
+      for (var i = 0; i < count; i++) clink(at + dur * Math.pow(Math.random(), 1.6), (vol || 0.06) * rand(0.4, 0.9));
     }
 
     // ---- explosions ----
@@ -658,7 +745,7 @@
           firework(0.4, 0.8);
           firework(1.2, 0.7);
           kaching(dur + 0.3, 0.07);
-          coinShower(0.5, 40, dur, 0.05);
+          coinShower(0.5, 25, dur, 0.05);
         }
       },
       // Jackpot: a barrage of fireworks, a giant blast and an avalanche of coins.
@@ -673,7 +760,7 @@
         for (var i = 0; i < 6; i++) firework(0.6 + i * 0.55 + Math.random() * 0.2, rand(0.8, 1.3));
         for (var k = 0; k < 6; k++) kaching(0.9 + k * 0.4, 0.07);
         coinDrop(1, 4.5, 0.07);
-        coinShower(1, 120, 4.5, 0.055);
+        coinShower(1, 60, 4.5, 0.055);
         sparkle(1, 80, 5, 0.025);
       },
       // Cosmic Eclipse: the light drains away with a deep rumble, then a
@@ -706,7 +793,7 @@
         boom(0, 2);
         for (var i = 0; i < 6; i++) firework(4 + i * 0.5 + Math.random() * 0.3, rand(0.9, 1.4));
         coinDrop(4, 4, 0.07);
-        coinShower(4, 100, 4, 0.055);
+        coinShower(4, 50, 4, 0.055);
         for (var k = 0; k < 8; k++) kaching(4.2 + k * 0.35, 0.07);
         brass([67, 72, 76, 79, 84], 7.2, 2, 0.055);
         sparkle(4, 60, 4, 0.025);
