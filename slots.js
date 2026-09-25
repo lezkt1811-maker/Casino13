@@ -3,24 +3,39 @@
   'use strict';
   var E = window.SlotsEngine;
 
-  var START_CREDITS = 1000;
-  var BETS = [1, 2, 5, 10, 25];
+  var START_CREDITS = 10000;
+  var COINS = [1, 2, 5, 10, 20, 50, 100];
+  var MAX_LEVEL = 10;
+  var SPEEDS = { slow: 1.6, medium: 1, fast: 0.4 };
+  var FEATURE_PRICE = 175; // × line bet
   var STORE_KEY = 'serpentBearerSlots.v1';
   var reduceMotion = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   var $ = function (id) { return document.getElementById(id); };
   var els = {
     credits: $('credits'), totalBet: $('totalBet'), lastWin: $('lastWin'),
-    bet: $('bet'), lineCount: $('lineCount'), spin: $('spin'), message: $('message'),
+    lineCount: $('lineCount'), spin: $('spin'), message: $('message'),
     lines: $('lines'), freeBanner: $('freeBanner'), freeCount: $('freeCount'),
-    auto: $('auto'), sound: $('sound'), ambience: $('ambience'), reset: $('reset'),
-    betUp: $('betUp'), betDown: $('betDown'), linesUp: $('linesUp'), linesDown: $('linesDown'),
+    autoCount: $('autoCount'), autoLeft: $('autoLeft'), sound: $('sound'), ambience: $('ambience'), reset: $('reset'),
+    coin: $('coin'), coinUp: $('coinUp'), coinDown: $('coinDown'),
+    level: $('level'), levelUp: $('levelUp'), levelDown: $('levelDown'),
+    linesUp: $('linesUp'), linesDown: $('linesDown'),
+    lineBet: $('lineBet'), lineBetLines: $('lineBetLines'), betSum: $('betSum'),
+    maxBet: $('maxBet'), buyFeature: $('buyFeature'), featurePrice: $('featurePrice'),
     jackpot: $('jackpot'), jackpotMeter: document.querySelector('.jackpot-meter'),
     forceEclipse: $('forceEclipse'), forceMega: $('forceMega')
   };
   var strips = Array.prototype.map.call(document.querySelectorAll('.reel .strip'), function (s) { return s; });
 
-  var state = load() || { credits: START_CREDITS, betIdx: 0, lines: E.PAYLINES.length, sound: true };
+  var state = load() || { credits: START_CREDITS, coinIdx: 0, level: 1, lines: E.PAYLINES.length, sound: true };
+  // Upgrade saves from the older single "bet per line" control.
+  if (typeof state.coinIdx !== 'number') {
+    state.coinIdx = 0;
+    state.level = Math.min(MAX_LEVEL, [1, 2, 5, 10, 25][state.betIdx] || 1);
+    delete state.betIdx;
+  }
+  if (!SPEEDS[state.speed]) state.speed = 'medium';
+  var autoLeft = 0;
   if (typeof state.jackpot !== 'number') state.jackpot = E.JACKPOT_SEED;
   var freeSpins = 0;
   var spinning = false;
@@ -54,25 +69,39 @@
   // The pool grows by fractions of a credit, so show cents like a real progressive.
   function fmtJackpot(v) { return v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
 
-  function bet() { return BETS[state.betIdx]; }
+  // Line bet = coin value × bet level.
+  function bet() { return COINS[state.coinIdx] * state.level; }
+  function speed() { return SPEEDS[state.speed]; }
   function totalBet() { return bet() * state.lines; }
 
   function updateMeters(win) {
     els.credits.textContent = state.credits.toLocaleString();
-    els.bet.textContent = bet();
+    els.coin.textContent = COINS[state.coinIdx];
+    els.level.textContent = state.level;
+    els.lineBet.textContent = bet().toLocaleString();
+    els.lineBetLines.textContent = state.lines;
+    els.betSum.textContent = totalBet().toLocaleString();
+    els.featurePrice.textContent = (FEATURE_PRICE * bet()).toLocaleString();
     els.lineCount.textContent = state.lines;
     els.totalBet.textContent = freeSpins > 0 ? 'FREE' : totalBet().toLocaleString();
     if (win !== undefined) els.lastWin.textContent = win.toLocaleString();
     els.freeBanner.hidden = freeSpins <= 0;
     els.freeCount.textContent = freeSpins;
     var locked = spinning || freeSpins > 0;
-    els.betUp.disabled = locked || state.betIdx >= BETS.length - 1;
-    els.betDown.disabled = locked || state.betIdx <= 0;
+    els.coinUp.disabled = locked || state.coinIdx >= COINS.length - 1;
+    els.coinDown.disabled = locked || state.coinIdx <= 0;
+    els.levelUp.disabled = locked || state.level >= MAX_LEVEL;
+    els.levelDown.disabled = locked || state.level <= 1;
+    els.maxBet.disabled = locked;
+    els.buyFeature.disabled = locked || bonusActive || state.credits < FEATURE_PRICE * bet();
+    document.querySelectorAll('.seg button').forEach(function (b) { b.classList.toggle('on', b.dataset.speed === state.speed); });
+    els.autoLeft.textContent = autoLeft > 0 && autoLeft !== Infinity ? autoLeft : '';
     els.linesUp.disabled = locked || state.lines >= E.PAYLINES.length;
     els.linesDown.disabled = locked || state.lines <= 1;
-    els.spin.disabled = spinning || bonusActive;
+    els.spin.disabled = bonusActive;
+    els.spin.classList.toggle('stop', spinning);
     els.jackpot.textContent = fmtJackpot(state.jackpot);
-    els.spin.textContent = freeSpins > 0 ? 'Free Spin' : 'Spin';
+    els.spin.textContent = spinning ? 'Stop' : freeSpins > 0 ? 'Free Spin' : 'Spin';
     drawLines(null);
   }
 
@@ -122,16 +151,23 @@
   }
 
   // ---------- spin ----------
+  // Tap Spin while the reels turn to slam them to a stop.
+  var reelStops = [];
+  function quickStop() {
+    audio.cancelReels();
+    reelStops.forEach(function (r) { if (!r.done) r.finish(); });
+  }
+
   function spin() {
-    if (spinning || bonusActive) return;
+    if (bonusActive) return;
+    if (spinning) { quickStop(); return; }
     var isFree = freeSpins > 0;
     if (!isFree && state.credits < totalBet()) {
       say('Not enough stardust. Lower your bet or refill.');
-      els.auto.checked = false;
+      setAuto(0);
       return;
     }
     audio.unlock();
-    audio.spin();
     spinning = true;
     if (isFree) freeSpins--;
     else {
@@ -146,6 +182,9 @@
     var mode = forced; forced = null; armDemo();
     var next = mode ? eclipseGrid() : E.spinGrid();
     var cellH = strips[0].parentNode.clientHeight / E.ROWS;
+    var durs = strips.map(function (_, c) { return reduceMotion ? 0 : (900 + c * 380) * speed(); });
+    audio.spin(durs.map(function (d) { return d / 1000; }));
+    reelStops = [];
     var stops = strips.map(function (strip, c) {
       return new Promise(function (resolve) {
         var filler = 14 + c * 6;
@@ -157,10 +196,21 @@
         strip.style.transition = 'none';
         strip.style.transform = 'translateY(' + (-dist) + 'px)';
         strip.offsetHeight; // commit start position before transitioning
-        var dur = reduceMotion ? 0 : 900 + c * 380;
+        var dur = durs[c];
         strip.style.transition = 'transform ' + dur + 'ms cubic-bezier(.15,.7,.25,1.04)';
         strip.style.transform = 'translateY(0)';
-        setTimeout(function () { audio.stop(c); resolve(); }, dur);
+        var r = { done: false };
+        r.finish = function () {
+          if (r.done) return;
+          r.done = true;
+          clearTimeout(r.timer);
+          strip.style.transition = 'none';
+          strip.style.transform = 'translateY(0)';
+          audio.stop(c);
+          resolve();
+        };
+        r.timer = setTimeout(r.finish, dur);
+        reelStops.push(r);
       });
     });
 
@@ -178,11 +228,26 @@
     return g;
   }
 
+  // Auto play: a number of paid spins (or Infinity); free spins don't use it up.
+  function setAuto(n) {
+    autoLeft = n;
+    if (n <= 0) els.autoCount.value = '0';
+    updateMetersKeepWin();
+  }
+  function updateMetersKeepWin() { var w = els.lastWin.textContent; updateMeters(); els.lastWin.textContent = w; }
+  function autoOn() { return autoLeft > 0; }
+
   function continueAuto(delay) {
-    if (freeSpins > 0 || els.auto.checked) {
+    if (freeSpins > 0 || autoOn()) {
       setTimeout(function () {
-        if (!spinning && !bonusActive && (freeSpins > 0 || els.auto.checked)) spin();
-      }, delay);
+        if (spinning || bonusActive) return;
+        if (freeSpins > 0) { spin(); return; }
+        if (!autoOn()) return;
+        autoLeft--;
+        if (autoLeft <= 0) { autoLeft = 0; els.autoCount.value = '0'; }
+        spin();
+        updateMetersKeepWin();
+      }, delay * speed());
     }
   }
 
@@ -271,7 +336,7 @@
     $('wheelSpin').disabled = false;
     $('bonus').hidden = false;
     $('wheelSpin').focus();
-    if (els.auto.checked || freeSpins > 0) setTimeout(spinWheel, 1200);
+    if (autoOn() || freeSpins > 0) setTimeout(spinWheel, 1200);
   }
 
   function spinWheel() {
@@ -302,10 +367,10 @@
       setTimeout(function () { $('bonus').hidden = true; openMega(amount); }, 1100);
       return;
     }
-    var win = slice.mult * totalBet();
+    var win = slice.mult * bet();
     state.credits += win;
     save();
-    $('bonusResult').textContent = E.BY_ID[slice.id].name + ' ×' + slice.mult + ' — +' + win.toLocaleString();
+    $('bonusResult').textContent = E.BY_ID[slice.id].name + ' ×' + slice.mult + ' line bet — +' + win.toLocaleString();
     rollUp(win, 2.5);
     audio.win(true, slice.mult, 2.5);
     wheelDone = 'win';
@@ -313,7 +378,7 @@
     btn.disabled = false;
     btn.focus();
     say('Zodiac Wheel: ' + E.BY_ID[slice.id].name + ' ×' + slice.mult + ' — +' + win.toLocaleString(), 'win big');
-    if (els.auto.checked || freeSpins > 0) setTimeout(function () { if (!$('bonus').hidden) closeWheel(); }, 3000);
+    if (autoOn() || freeSpins > 0) setTimeout(function () { if (!$('bonus').hidden) closeWheel(); }, 3000);
   }
 
   function closeWheel() {
@@ -346,7 +411,7 @@
       if (t < 1 && !box.hidden) requestAnimationFrame(count);
     })(start);
     $('megaCollect').focus();
-    if (els.auto.checked || freeSpins > 0) setTimeout(function () { if (!box.hidden) closeMega(); }, 9000);
+    if (autoOn() || freeSpins > 0) setTimeout(function () { if (!box.hidden) closeMega(); }, 9000);
   }
   function closeMega() {
     $('mega').hidden = true;
@@ -536,6 +601,7 @@
     // Each coin rings with the inharmonic modes of a thin metal disc, with
     // slightly split mode pairs that give the shimmering "ching" of real coins.
     var coinBank = { land: [], bounce: [] };
+    var reelBus = null;
 
     function renderCoinBank() {
       if (!window.OfflineAudioContext) return;
@@ -775,19 +841,60 @@
         syncAmbience();
       },
       // Spin: a magic swoosh trailing glitter.
-      spin: function () {
+      // Spin: the start "ka-chunk", then each reel's ratchet clicking past
+      // the pawl (about 22 clicks a second, slowing as the reel coasts to a
+      // stop) over a soft mechanical whir. All of it runs on one bus so a
+      // quick stop can cut it off.
+      spin: function (durs) {
         if (!ready()) return;
+        durs = durs || [0.9, 1.28, 1.66];
         if (sample('spin')) return;
-        noise(0, 0.7, 600, 9000, 0.12, { q: 1.5, attack: 0.25, rev: 0.6 });
-        sparkle(0.1, 12, 0.8, 0.028);
+        reelBus = ctx.createGain(); reelBus.gain.value = 1; out(reelBus, 0.05, 0);
+        var bus = reelBus;
+        function tick(t, vol) {
+          var src = ctx.createBufferSource(), bp = ctx.createBiquadFilter(), g = ctx.createGain(), at = ctx.currentTime + t;
+          src.buffer = noiseBuf; bp.type = 'bandpass'; bp.frequency.value = rand(2300, 2900); bp.Q.value = 5;
+          g.gain.setValueAtTime(vol, at); g.gain.exponentialRampToValueAtTime(0.0001, at + 0.014);
+          src.connect(bp); bp.connect(g); g.connect(bus); src.start(at, Math.random()); src.stop(at + 0.02);
+          var o = ctx.createOscillator(), og = ctx.createGain();
+          o.frequency.setValueAtTime(820, at); o.frequency.exponentialRampToValueAtTime(420, at + 0.02);
+          og.gain.setValueAtTime(vol * 0.35, at); og.gain.exponentialRampToValueAtTime(0.0001, at + 0.022);
+          o.connect(og); og.connect(bus); o.start(at); o.stop(at + 0.03);
+        }
+        // start ka-chunk
+        voice(140, 0, 0.12, { vol: 0.22, glide: 60, rev: 0 });
+        noise(0, 0.06, 1400, 400, 0.12, { type: 'lowpass', rev: 0 });
+        noise(0.05, 0.03, 3600, 3000, 0.06, { q: 6, rev: 0 });
+        var longest = Math.max.apply(null, durs);
+        durs.forEach(function (d, c) {
+          var t = 0.06 + c * 0.012;
+          while (t < d) {
+            var p = t / d, gap = p < 0.65 ? 0.045 : 0.045 + (p - 0.65) * 0.25;
+            tick(t, 0.11 * (p < 0.65 ? 1 : 1 - (p - 0.65)));
+            t += gap;
+          }
+        });
+        // whir: filtered noise, not a tone, so there is no hum
+        var src = ctx.createBufferSource(), lp = ctx.createBiquadFilter(), g = ctx.createGain(), now = ctx.currentTime;
+        src.buffer = noiseBuf; src.loop = true; lp.type = 'lowpass'; lp.frequency.value = 700;
+        g.gain.setValueAtTime(0.0001, now); g.gain.exponentialRampToValueAtTime(0.05, now + 0.1);
+        g.gain.setValueAtTime(0.05, now + longest * 0.7); g.gain.exponentialRampToValueAtTime(0.0001, now + longest);
+        src.connect(lp); lp.connect(g); g.connect(bus); src.start(now); src.stop(now + longest + 0.05);
       },
-      // Reel stop: a solid thud with a puff of sparkles.
+      cancelReels: function () {
+        if (!ctx || !reelBus) return;
+        reelBus.gain.cancelScheduledValues(ctx.currentTime);
+        reelBus.gain.setTargetAtTime(0, ctx.currentTime, 0.01);
+        reelBus = null;
+      },
+      // Reel stop: a heavy mechanical clunk.
       stop: function (c) {
         if (!ready()) return;
         if (sample('reelstop')) return;
-        voice(160, 0, 0.12, { vol: 0.18, glide: 70, rev: 0 });
-        noise(0, 0.05, 3000, 900, 0.07, { type: 'lowpass', rev: 0 });
-        sparkle(0.02, 2 + c, 0.15, 0.02);
+        // Mechanical reel stop: a heavy clunk plus the latch snapping in.
+        voice(110, 0, 0.13, { vol: 0.3, glide: 45, rev: 0 });
+        noise(0, 0.07, 2200, 300, 0.14, { type: 'lowpass', rev: 0 });
+        noise(0.004, 0.03, 3300, 2800, 0.07, { q: 6, rev: 0 });
       },
       miss: function () {
         if (!ready()) return;
@@ -942,15 +1049,44 @@
   document.addEventListener('keydown', function (e) {
     if ((e.code === 'Space' || e.code === 'Enter') && e.target === document.body) { e.preventDefault(); spin(); }
   });
-  els.betUp.addEventListener('click', function () { state.betIdx = Math.min(BETS.length - 1, state.betIdx + 1); save(); updateMeters(); });
-  els.betDown.addEventListener('click', function () { state.betIdx = Math.max(0, state.betIdx - 1); save(); updateMeters(); });
+  els.coinUp.addEventListener('click', function () { state.coinIdx = Math.min(COINS.length - 1, state.coinIdx + 1); save(); updateMeters(); });
+  els.coinDown.addEventListener('click', function () { state.coinIdx = Math.max(0, state.coinIdx - 1); save(); updateMeters(); });
+  els.levelUp.addEventListener('click', function () { state.level = Math.min(MAX_LEVEL, state.level + 1); save(); updateMeters(); });
+  els.levelDown.addEventListener('click', function () { state.level = Math.max(1, state.level - 1); save(); updateMeters(); });
+  els.maxBet.addEventListener('click', function () {
+    state.coinIdx = COINS.length - 1; state.level = MAX_LEVEL; state.lines = E.PAYLINES.length; save(); updateMeters();
+    say('Max bet: ' + totalBet().toLocaleString() + ' a spin.');
+  });
+  document.querySelectorAll('.seg button').forEach(function (b) {
+    b.addEventListener('click', function () { state.speed = b.dataset.speed; save(); updateMetersKeepWin(); });
+  });
+  els.autoCount.addEventListener('change', function () {
+    var v = els.autoCount.value === 'Infinity' ? Infinity : +els.autoCount.value;
+    autoLeft = v;
+    updateMetersKeepWin();
+    if (v > 0 && !spinning && !bonusActive) { autoLeft--; spin(); if (autoLeft <= 0) { autoLeft = 0; els.autoCount.value = '0'; } updateMetersKeepWin(); }
+  });
+  els.buyFeature.addEventListener('click', function () {
+    var cost = FEATURE_PRICE * bet();
+    if (spinning || bonusActive || freeSpins > 0) return;
+    if (state.credits < cost) { say('Not enough stardust to buy the feature.'); return; }
+    audio.unlock();
+    state.credits -= cost;
+    state.jackpot += cost * E.JACKPOT_CONTRIBUTION;
+    bonusActive = true;
+    save();
+    updateMeters(0);
+    say('Feature bought for ' + cost.toLocaleString() + '! The Zodiac Wheel awakens…', 'win big');
+    audio.eclipse();
+    setTimeout(function () { openWheel(false); }, 1200);
+  });
   els.linesUp.addEventListener('click', function () { state.lines = Math.min(E.PAYLINES.length, state.lines + 1); save(); updateMeters(); });
   els.linesDown.addEventListener('click', function () { state.lines = Math.max(1, state.lines - 1); save(); updateMeters(); });
   $('wheelSpin').addEventListener('click', spinWheel);
   $('megaCollect').addEventListener('click', closeMega);
   els.forceEclipse.addEventListener('click', function () { forced = forced === 'eclipse' ? null : 'eclipse'; armDemo(); });
   els.forceMega.addEventListener('click', function () { forced = forced === 'mega' ? null : 'mega'; armDemo(); });
-  els.auto.addEventListener('change', function () { if (els.auto.checked && !spinning) spin(); });
+
   els.sound.checked = state.sound !== false;
   els.sound.addEventListener('change', function () { state.sound = els.sound.checked; save(); audio.sync(); });
   els.ambience.checked = state.ambience2 === true;

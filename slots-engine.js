@@ -49,14 +49,15 @@
   // Sun, Moon and Ophiuchus together on an active payline (any order) opens the
   // Zodiac Wheel. Its 13 slices follow the true-sky ecliptic; landing on the
   // Ophiuchus slice wins the progressive Mega Jackpot. Other slices pay a
-  // multiple of the total bet.
+  // multiple of the line bet (so the bonus is worth the same per line whether
+  // you play 1 line or all 9).
   var ECLIPSE = ['sun', 'moon', 'ophiuchus'];
   var WHEEL = [
-    { id: 'aries', mult: 10 }, { id: 'taurus', mult: 25 }, { id: 'gemini', mult: 15 },
-    { id: 'cancer', mult: 50 }, { id: 'leo', mult: 20 }, { id: 'virgo', mult: 30 },
-    { id: 'libra', mult: 15 }, { id: 'scorpio', mult: 100 }, { id: 'ophiuchus', jackpot: true },
-    { id: 'sagittarius', mult: 75 }, { id: 'capricorn', mult: 20 }, { id: 'aquarius', mult: 40 },
-    { id: 'pisces', mult: 10 }
+    { id: 'aries', mult: 50 }, { id: 'taurus', mult: 125 }, { id: 'gemini', mult: 75 },
+    { id: 'cancer', mult: 250 }, { id: 'leo', mult: 100 }, { id: 'virgo', mult: 150 },
+    { id: 'libra', mult: 75 }, { id: 'scorpio', mult: 500 }, { id: 'ophiuchus', jackpot: true },
+    { id: 'sagittarius', mult: 375 }, { id: 'capricorn', mult: 100 }, { id: 'aquarius', mult: 200 },
+    { id: 'pisces', mult: 50 }
   ];
   var JACKPOT_SEED = 1000;        // credits the Mega Jackpot resets to
   var JACKPOT_CONTRIBUTION = 0.02; // share of every paid bet added to the pool
@@ -71,7 +72,11 @@
     { name: 'Top',      rows: [0, 0, 0] },
     { name: 'Bottom',   rows: [2, 2, 2] },
     { name: 'Descending', rows: [0, 1, 2] },
-    { name: 'Ascending',  rows: [2, 1, 0] }
+    { name: 'Ascending',  rows: [2, 1, 0] },
+    { name: 'V',          rows: [0, 1, 0] },
+    { name: 'Peak',       rows: [2, 1, 2] },
+    { name: 'Crown',      rows: [1, 0, 1] },
+    { name: 'Valley',     rows: [1, 2, 1] }
   ];
 
   var TOTAL_WEIGHT = SYMBOLS.reduce(function (a, s) { return a + s.weight; }, 0);

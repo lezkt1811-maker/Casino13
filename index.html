@@ -9,7 +9,7 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22%3E%3Ctext y=%22.9em%22 font-size=%2290%22 fill=%22%23ff2bd6%22%3E%E2%9B%8E%3C/text%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="slots.css?v=20260924222929">
+<link rel="stylesheet" href="slots.css?v=20260925134948">
 </head>
 <body>
 <div class="plasma" aria-hidden="true"></div>
@@ -46,24 +46,54 @@
     </div>
 
     <div class="controls">
-      <div class="stepper" aria-label="Bet per line">
-        <span class="lbl">Bet / line</span>
-        <button type="button" id="betDown" aria-label="Lower bet">&minus;</button>
-        <b id="bet">1</b>
-        <button type="button" id="betUp" aria-label="Raise bet">+</button>
+      <div class="stepper" aria-label="Coin value">
+        <span class="lbl">Coin</span>
+        <button type="button" id="coinDown" aria-label="Lower coin value">&minus;</button>
+        <b id="coin">1</b>
+        <button type="button" id="coinUp" aria-label="Raise coin value">+</button>
+      </div>
+      <div class="stepper" aria-label="Bet level">
+        <span class="lbl">Level</span>
+        <button type="button" id="levelDown" aria-label="Lower bet level">&minus;</button>
+        <b id="level">1</b>
+        <button type="button" id="levelUp" aria-label="Raise bet level">+</button>
       </div>
       <div class="stepper" aria-label="Paylines">
         <span class="lbl">Lines</span>
         <button type="button" id="linesDown" aria-label="Fewer lines">&minus;</button>
-        <b id="lineCount">5</b>
+        <b id="lineCount">9</b>
         <button type="button" id="linesUp" aria-label="More lines">+</button>
+      </div>
+    </div>
+    <p class="betline">Line bet <b id="lineBet">1</b> &times; <b id="lineBetLines">9</b> lines = <b id="betSum">9</b></p>
+
+    <div class="quick">
+      <button type="button" class="chip" id="maxBet">Max bet</button>
+      <div class="seg" role="group" aria-label="Spin speed">
+        <button type="button" data-speed="slow">Slow</button>
+        <button type="button" data-speed="medium">Medium</button>
+        <button type="button" data-speed="fast">Fast</button>
       </div>
     </div>
 
     <button type="button" class="spin" id="spin">Spin</button>
 
+    <div class="quick">
+      <label class="sel">Auto
+        <select id="autoCount" aria-label="Auto spins">
+          <option value="0">Off</option>
+          <option value="10">10</option>
+          <option value="25">25</option>
+          <option value="50">50</option>
+          <option value="100">100</option>
+          <option value="Infinity">&infin;</option>
+        </select>
+        <span class="auto-left" id="autoLeft"></span>
+      </label>
+      <button type="button" class="chip feature" id="buyFeature">Buy feature <small id="featurePrice">175</small></button>
+    </div>
+
     <div class="aux">
-      <label class="toggle"><input type="checkbox" id="auto"> Auto</label>
       <label class="toggle"><input type="checkbox" id="sound" checked> Sound</label>
       <label class="toggle"><input type="checkbox" id="ambience"> Cosmos</label>
       <button type="button" class="ghost" id="reset">Refill stardust</button>
@@ -72,7 +102,7 @@
 
   <details class="card demo">
     <summary>Demo controls</summary>
-    <p class="note">The bonus shows up about once every 325 spins. Use these to see it now. The next spin still costs your normal bet.</p>
+    <p class="note">With all 9 lines, the bonus shows up about once every 190 spins. Use these to see it now. The next spin still costs your normal bet.</p>
     <div class="demo-btns">
       <button type="button" class="ghost" id="forceEclipse">Next spin: Cosmic Eclipse</button>
       <button type="button" class="ghost" id="forceMega">Next spin: Mega Jackpot</button>
@@ -86,8 +116,10 @@
     <ul class="rules">
       <li><b class="g">&#x26CE;&#xFE0E; Ophiuchus</b> is wild. It stands in for any sign, the Sun, or the Moon.</li>
       <li>Three or more <b class="g">&#x26CE;&#xFE0E;</b> anywhere on the reels award <b id="fsAward">5</b> free spins.</li>
-      <li><b>Cosmic Eclipse:</b> the <b class="g">&#x2609; Sun</b>, <b class="g">&#x263D;&#xFE0E; Moon</b> and <b class="g">&#x26CE;&#xFE0E; Ophiuchus</b> together on one active line, in any order, open the <b>Zodiac Wheel</b>. Its 13 slices pay 10&ndash;100&times; your total bet, and the <b class="g">&#x26CE;&#xFE0E;</b> slice wins the <b>Mega Jackpot</b>.</li>
+      <li><b>Cosmic Eclipse:</b> the <b class="g">&#x2609; Sun</b>, <b class="g">&#x263D;&#xFE0E; Moon</b> and <b class="g">&#x26CE;&#xFE0E; Ophiuchus</b> together on one active line, in any order, open the <b>Zodiac Wheel</b>. Its 13 slices pay 50&ndash;500&times; your line bet, and the <b class="g">&#x26CE;&#xFE0E;</b> slice wins the <b>Mega Jackpot</b>.</li>
       <li>The Mega Jackpot starts at 1,000 and grows by 2% of every bet until someone wins it.</li>
+      <li><b>Buy feature</b> goes straight to the Zodiac Wheel for 175&times; your line bet.</li>
+      <li><b>Line bet</b> = coin &times; level. <b>Total bet</b> = line bet &times; lines. Tap <b>Spin</b> while the reels are turning to stop them early.</li>
       <li>An <b>Elemental Trine</b> is three signs of one element on a line: fire, earth, air, or water.</li>
     </ul>
   </section>
@@ -128,7 +160,7 @@
   </div>
 </div>
 
-<script src="slots-engine.js?v=20260924222929"></script>
-<script src="slots.js?v=20260924222929"></script>
+<script src="slots-engine.js?v=20260925134948"></script>
+<script src="slots.js?v=20260925134948"></script>
 </body>
 </html>
