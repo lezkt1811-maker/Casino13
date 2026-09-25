@@ -1,6 +1,8 @@
-# Real sound recordings (optional)
+# Sounds
 
-The game ships with its own generated casino sounds. If you'd rather use recordings, put MP3 or WAV files in this folder with the names below. Each file replaces just that one sound; anything without a file keeps the built-in version.
+`casino-sounds.mp3` holds the game's built-in real instrument recordings (glockenspiel, tubular bells, triangle, cymbals, chimes and more) from the GeneralUser GS SoundFont by S. Christian Collins. See `LICENSE-GeneralUser-GS.txt`. Don't rename or delete it.
+
+To swap in your own recordings instead, put MP3 or WAV files in this folder with the names below. Each file replaces just that one sound; anything without a file keeps the built-in version.
 
 | File name | When it plays |
 |---|---|

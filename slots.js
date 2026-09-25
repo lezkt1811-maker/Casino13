@@ -531,6 +531,17 @@
     var OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
     var ctx = null, master, reverbIn, noiseBuf, buses = {};
     var bank = { bell: {}, coin: [], ready: false };
+
+    // ---- real instrument recordings ----
+    // sounds/casino-sounds.mp3 holds 26 real recordings rendered from the
+    // GeneralUser GS SoundFont by S. Christian Collins: glockenspiel at every
+    // win pitch, tubular bells, and from the drum kit a triangle, ride bell,
+    // crash and splash cymbals, jingle bell, chimes (mark tree), tambourine
+    // and wood block. It is fetched while the page loads, decoded once audio
+    // starts, and sliced into one AudioBuffer per clip. Offsets are seconds.
+    var SPRITE = {"glock72":[0,1.2954],"glock76":[1.3554,1.2965],"glock79":[2.712,1.2971],"glock84":[4.069,1.2979],"glock86":[5.4269,1.2982],"glock88":[6.7851,1.2984],"glock91":[8.1435,1.2987],"glock93":[9.5022,1.2989],"glock96":[10.8611,1.2991],"glock98":[12.2202,1.2993],"glock100":[13.5794,1.2997],"glock103":[14.9391,1.2998],"glock105":[16.2988,1.2998],"glock108":[17.6587,1.2999],"tube72":[19.0185,2.1873],"tube76":[21.2659,2.3184],"tube79":[23.6443,2.1744],"tube84":[25.8787,2.2071],"triangle":[28.1458,1.4],"ridebell":[29.6058,2],"crash":[31.6658,2.6],"splash":[34.3258,1.4152],"jingle":[35.801,0.4399],"chimes":[36.3008,3.4],"tambourine":[39.7608,0.7963],"woodblock":[40.6172,0.1115]};
+    var real = {}, realLoaded = false;
+    var spriteData = window.fetch ? fetch('sounds/casino-sounds.mp3').then(function (r) { return r.ok ? r.arrayBuffer() : null; }).catch(function () { return null; }) : null;
     var reelBus = null, antic = null, ambTimer = null;
 
     // Relative loudness of each sound family.
@@ -556,6 +567,7 @@
         try { ctx = new AC({ latencyHint: 'interactive' }); } catch (e) { try { ctx = new AC(); } catch (e2) { return; } }
         build();
         renderBank();
+        loadSprite();
         loadSamples();
       }
       if (ctx.state !== 'running' && ctx.resume) { var p = ctx.resume(); if (p && p.catch) p.catch(function () {}); }
@@ -573,7 +585,7 @@
       var limiter = ctx.createDynamicsCompressor();
       limiter.threshold.value = -10; limiter.knee.value = 6; limiter.ratio.value = 12;
       limiter.attack.value = 0.003; limiter.release.value = 0.25;
-      master = ctx.createGain(); master.gain.value = 0.9;
+      master = ctx.createGain(); master.gain.value = 0.8;
       master.connect(limiter); limiter.connect(ctx.destination);
 
       // A short, bright room: bells ring out without washing into a hum.
@@ -681,26 +693,77 @@
       if (p && p.then) p.then(done).catch(function () {});
     }
 
+    function loadSprite() {
+      if (!spriteData) return;
+      spriteData.then(function (data) {
+        if (!data) return null;
+        return new Promise(function (ok, fail) { ctx.decodeAudioData(data.slice(0), ok, fail); });
+      }).then(function (buf) {
+        if (!buf) return;
+        var d = buf.getChannelData(0), sr = buf.sampleRate, i = 0, lim = Math.min(d.length, Math.floor(sr * 0.1));
+        // MP3 decoders add a short delay; measure it from the first clip's onset.
+        while (i < lim && Math.abs(d[i]) < 0.02) i++;
+        var shift = i < lim ? i / sr - 0.0004 : 0.0255;
+        Object.keys(SPRITE).forEach(function (k) {
+          var a = Math.max(0, Math.floor((SPRITE[k][0] + shift - 0.004) * sr));
+          var n = Math.min(Math.floor((SPRITE[k][1] + 0.004) * sr), d.length - a);
+          var b = ctx.createBuffer(1, n, sr);
+          b.getChannelData(0).set(d.subarray(a, a + n));
+          real[k] = b;
+        });
+        realLoaded = true;
+      }).catch(function () {});
+    }
+
     // ---- playback ----
-    function playBuf(buf, at, gain, bus, rate) {
-      var s = ctx.createBufferSource(), g = ctx.createGain();
+    // cut: optionally damp the clip after this many seconds (keeps coin and
+    // glitter hits short even though the recordings ring longer).
+    function playBuf(buf, at, gain, bus, rate, cut) {
+      var s = ctx.createBufferSource(), g = ctx.createGain(), t = ctx.currentTime + Math.max(0, at || 0);
       s.buffer = buf; if (rate) s.playbackRate.value = rate;
-      g.gain.value = gain;
+      if (cut) { g.gain.setValueAtTime(gain, t); g.gain.setTargetAtTime(0, t + cut * 0.3, cut * 0.25); }
+      else g.gain.value = gain;
       s.connect(g); g.connect(bus);
       s.onended = function () { s.disconnect(); g.disconnect(); };
-      s.start(ctx.currentTime + Math.max(0, at || 0));
+      s.start(t);
+      if (cut) s.stop(t + cut * 1.6);
       return s;
     }
-    // One bell hit (falls back to live synthesis for the moment before the bank is ready).
-    function bell(m, at, gain, bus) {
-      m = Math.max(BELL_LO, Math.min(BELL_HI, Math.round(m)));
+    // Play a real recording by name; returns null if it isn't loaded.
+    function clip(name, at, gain, bus, rate, cut) {
+      return real[name] ? playBuf(real[name], at, gain, bus, rate, cut) : null;
+    }
+    var GLOCK = [72, 76, 79, 84, 86, 88, 91, 93, 96, 98, 100, 103, 105, 108];
+    // One bell hit: the real glockenspiel at that pitch, with a quiet layer of
+    // the struck-metal model underneath for extra ring. Before the recordings
+    // load it falls back to the model alone.
+    function bell(m, at, gain, bus, ring) {
+      m = Math.round(m);
+      ring = ring || 0.45;
+      if (realLoaded) {
+        var near = GLOCK.reduce(function (a, b) { return Math.abs(b - m) < Math.abs(a - m) ? b : a; });
+        var s = playBuf(real['glock' + near], at, gain, bus, Math.pow(2, (m - near) / 12) * rand(0.998, 1.002), ring);
+        var mm = Math.max(BELL_LO, Math.min(BELL_HI, m));
+        if (bank.bell[mm]) playBuf(bank.bell[mm], at, gain * 0.2, bus, 0, ring);
+        return s;
+      }
+      m = Math.max(BELL_LO, Math.min(BELL_HI, m));
       if (bank.bell[m]) return playBuf(bank.bell[m], at, gain, bus, rand(0.997, 1.003));
       var g = ctx.createGain(); g.gain.value = gain * 2.2; g.connect(bus);
       bellModel(ctx, g, noiseBuf, ctx.currentTime + Math.max(0, at || 0), hz(m), 0.3);
       setTimeout(function () { g.disconnect(); }, ((at || 0) + 1.3) * 1000);
       return null;
     }
+    // A coin: a real triangle strike damped short (the bright CHING), the
+    // struck-disc coin model for the metallic body, and now and then a
+    // jingle-bell rattle.
     function coin(at, gain, bus, rate) {
+      if (realLoaded) {
+        var s = playBuf(real.triangle, at, gain * 0.6, bus, (rate || 1) * rand(1.05, 1.35), 0.16);
+        if (bank.coin.length) playBuf(bank.coin[Math.floor(Math.random() * bank.coin.length)], at, gain * 0.7, bus, rate || rand(0.92, 1.1));
+        if (Math.random() < 0.25) playBuf(real.jingle, at + 0.005, gain * 0.25, bus, rand(1.2, 1.5), 0.12);
+        return s;
+      }
       if (bank.coin.length) return playBuf(bank.coin[Math.floor(Math.random() * bank.coin.length)], at, gain, bus, rate || rand(0.92, 1.1));
       var g = ctx.createGain(); g.gain.value = gain * 2.5; g.connect(bus);
       coinModel(ctx, g, noiseBuf, ctx.currentTime + Math.max(0, at || 0), rand(2900, 3700) * (rate || 1), 0.3);
@@ -708,11 +771,14 @@
       return null;
     }
     // Sparkle: coins pitched way up become tiny glittering metallic pings.
-    function glitter(at, gain, bus) { return coin(at, gain, bus, rand(1.8, 2.4)); }
+    function glitter(at, gain, bus) {
+      if (realLoaded) return playBuf(real['glock' + (Math.random() < 0.5 ? 105 : 108)], at, gain * 0.6, bus, rand(1, 1.12), 0.2);
+      return coin(at, gain, bus, rand(1.8, 2.4));
+    }
     // A bell hit doubled an octave up for a fuller, layered chime.
-    function chime(m, at, gain, bus, octave) {
-      bell(m, at, gain, bus);
-      if (octave) bell(m + 12, at + 0.004, gain * octave, bus);
+    function chime(m, at, gain, bus, octave, ring) {
+      bell(m, at, gain, bus, ring);
+      if (octave) bell(m + 12, at + 0.004, gain * octave, bus, ring);
     }
 
     // A dry mechanical tick (ratchet pawl, wheel flapper). Noise only, no pitch sweep.
@@ -773,6 +839,7 @@
       partial(ctx, bus, t, 2650 * k, amp * 0.28, 0.05);
       partial(ctx, bus, t, 4100 * k, amp * 0.16, 0.035);
       partial(ctx, bus, t, 6300 * k, amp * 0.08, 0.02);
+      clip('woodblock', 0, amp * 0.55, bus, 1.15 + i * 0.08);
     }
 
     // SMALL WIN: DING! DING! DING! DING! (four rising bells, about a second).
@@ -781,7 +848,7 @@
       if (sample(['smallwin', 'win'], buses.small)) return;
       var bus = buses.small;
       [84, 88, 91, 96].forEach(function (m, i) {
-        chime(m, i * 0.18, 0.8 + i * 0.07, bus, 0.25);
+        chime(m, i * 0.18, 0.8 + i * 0.07, bus, 0.25, i === 3 ? 0.55 : 0.4);
         coin(i * 0.18 + 0.01, 0.35, buses.coin);
       });
     }
@@ -795,9 +862,10 @@
       [84, 86, 88, 91, 93, 96, 98, 100, 103].forEach(function (m, i) { chime(m, i * 0.12, 0.75, bus, 0.3); });
       for (t = 0.05; t < 1.35; t += rand(0.08, 0.11)) coin(t, rand(0.3, 0.5), buses.coin);
       for (var s = 0; s < 6; s++) glitter(1.0 + Math.random() * 0.45, 0.3, bus);
-      chime(96, 1.2, 0.85, bus, 0.35);
-      chime(103, 1.2, 0.7, bus);
-      chime(108, 1.32, 0.6, bus);
+      chime(96, 1.2, 0.85, bus, 0.35, 0.6);
+      chime(103, 1.2, 0.7, bus, 0, 0.6);
+      chime(108, 1.32, 0.6, bus, 0, 0.6);
+      clip('chimes', 1.0, 0.45, bus, 1, 0.9);
     }
 
     // BIG WIN: a rapid two-bell ring, a rising two-octave cascade in thirds,
@@ -812,8 +880,11 @@
         bell(m + 4, 0.92 + j * 0.09, 0.4, bus);
       });
       for (i = 0; i < 6; i++) bell(i % 2 ? 108 : 103, 1.95 + i * 0.07, 0.6, bus);
-      [84, 88, 91, 96, 100].forEach(function (m, j) { bell(m, 2.45 + j * 0.015, 0.7, bus); });
-      bell(108, 2.55, 0.7, bus);
+      [84, 88, 91, 96, 100].forEach(function (m, j) { bell(m, 2.45 + j * 0.015, 0.7, bus, 0.8); });
+      bell(108, 2.55, 0.7, bus, 0.8);
+      clip('chimes', 0.9, 0.45, bus, 1, 1.4);
+      clip('tube84', 2.45, 0.45, bus, 1, 0.9);
+      clip('splash', 2.47, 0.45, bus, 1, 0.9);
       for (t = 0.2; t < 2.9; t += rand(0.055, 0.085)) coin(t, rand(0.35, 0.6), buses.coin);
       for (i = 0; i < 25; i++) glitter(0.9 + Math.random() * 2.1, 0.25, bus);
     }
@@ -826,18 +897,22 @@
       if (!ready()) return;
       if (sample(mega ? ['megajackpot', 'jackpot'] : ['jackpot'], buses.jackpot)) return;
       var bus = buses.jackpot, i, t;
-      // A: jackpot bell roll, 20 hits a second, with low and high layers
+      clip('splash', 0, 0.45, bus, 1, 0.9);
+      // A: jackpot bell roll, 20 hits a second, with low and high layers and a ride-bell alarm
       for (i = 0; i < 22; i++) {
         t = i * 0.05;
         bell(i % 2 ? 100 : 96, t, 0.7, bus);
         if (i % 4 === 0) bell(84, t, 0.55, bus);
         if (i % 2 === 0) bell(108, t + 0.01, 0.3, bus);
         if (mega && i % 2) bell(91, t + 0.02, 0.35, bus);
+        if (i % 4 === 2) clip('ridebell', t, 0.4, bus, 1.5, 0.25);
       }
+      for (i = 0; i < 6; i++) clip('tambourine', 0.6 + Math.random() * 3.2, 0.3, bus, rand(0.95, 1.1));
       // B: coin shower, densest in the middle
       var n = mega ? 120 : 80;
       for (i = 0; i < n; i++) coin(0.4 + 2.0 * (Math.random() + Math.random()), rand(0.3, 0.55), bus);
-      // C: ascending cascade in three layers
+      // C: ascending cascade in three layers, over a chimes sweep
+      clip('chimes', 1.1, 0.6, bus, 1, 1.4);
       [72, 76, 79, 84, 88, 91, 96, 100, 103, 108].forEach(function (m, j) {
         t = 1.1 + j * 0.12;
         chime(m, t, 0.75, bus, 0.3);
@@ -849,9 +924,12 @@
       // E: glitter throughout
       for (i = 0; i < 40; i++) glitter(0.2 + Math.random() * 4.4, 0.28, bus);
       // F: triumphant flourish and the climax
-      [72, 79, 84, 88, 91, 96, 100, 103, 108].forEach(function (m, j) { bell(m, 3.4 + j * 0.02, 0.65, bus); });
-      [100, 103, 108].forEach(function (m, j) { bell(m, 3.75 + j * 0.08, 0.7, bus); });
-      [72, 84, 96, 108].forEach(function (m) { bell(m, 4.05, mega ? 0.9 : 0.8, bus); });
+      [72, 79, 84, 88, 91, 96, 100, 103, 108].forEach(function (m, j) { bell(m, 3.4 + j * 0.02, 0.65, bus, 0.6); });
+      [100, 103, 108].forEach(function (m, j) { bell(m, 3.75 + j * 0.08, 0.7, bus, 0.5); });
+      [72, 84, 96, 108].forEach(function (m) { bell(m, 4.05, mega ? 0.8 : 0.75, bus, 0.8); });
+      ['tube72', 'tube79', 'tube84'].forEach(function (k, j) { clip(k, 3.4 + j * 0.03, 0.45, bus, 1, 0.6); clip(k, 4.05, 0.55, bus, 1, 0.8); });
+      clip('crash', 4.05, mega ? 0.6 : 0.55, bus, 1, 0.9);
+      if (mega) clip('chimes', 4.1, 0.5, bus, 1, 0.8);
       for (i = 0; i < 15; i++) coin(3.4 + Math.random() * 0.4, rand(0.4, 0.6), bus);
     }
 
@@ -904,6 +982,7 @@
       var bus = buses.medium, i;
       for (i = 0; i < 13; i++) bell(i % 2 ? 100 : 96, i * 0.055, 0.65, bus);
       PENT.forEach(function (m, j) { chime(m, 0.75 + j * 0.07, 0.7, bus, 0.25); });
+      clip('chimes', 0.7, 0.5, bus, 1, 1.0);
       for (i = 0; i < 10; i++) coin(0.8 + Math.random() * 0.8, 0.4, buses.coin);
       for (i = 0; i < 8; i++) glitter(0.9 + Math.random() * 0.8, 0.25, bus);
     }
@@ -916,7 +995,8 @@
       [[88, 91, 96], [91, 96, 100], [96, 100, 103]].forEach(function (tri, k) {
         tri.forEach(function (m, j) { chime(m, k * 0.3 + j * 0.06, 0.7, bus, 0.2); });
       });
-      chime(108, 0.95, 0.75, bus, 0);
+      chime(108, 0.95, 0.75, bus, 0, 0.6);
+      clip('chimes', 0, 0.45, bus, 1, 0.9);
       for (var i = 0; i < 6; i++) coin(0.2 + Math.random() * 1.0, 0.4, buses.coin);
     }
 
@@ -944,10 +1024,10 @@
     return {
       unlock: unlock,
       TIER_DUR: TIER_DUR,
-      isReady: function () { return bank.ready; },
+      isReady: function () { return bank.ready && realLoaded; },
       sync: function () {
         if (!ctx) { unlock(); return; }
-        master.gain.setTargetAtTime(soundOn() ? 0.9 : 0, ctx.currentTime, 0.05);
+        master.gain.setTargetAtTime(soundOn() ? 0.8 : 0, ctx.currentTime, 0.05);
         syncAmbience();
       },
       // Reels spinning: the start ka-chunk, a ratchet clicking past the pawl

@@ -19,18 +19,20 @@ It is plain HTML, CSS and JavaScript with no build step. Open `index.html` in a 
 
 ## Sound
 
-All sounds are generated in the browser with the Web Audio API, so there are no files to download. Every bell and coin is a layered struck-metal model: several inharmonic partials, a detuned pair for shimmer and a noise "strike" transient, with each layer decaying at its own rate. They're rendered once into a bank of sound clips when audio starts, so even a jackpot with hundreds of overlapping hits stays smooth on phones.
+The bells, chimes, cymbals and coin "ching" are **real instrument recordings** from the [GeneralUser GS](http://www.schristiancollins.com/generaluser.php) SoundFont by S. Christian Collins: glockenspiel at every win pitch, tubular bells, and from its drum kit a triangle, ride bell, crash and splash cymbals, jingle bell, chimes (mark tree), tambourine and wood block. All 26 clips are packed into one file, [`sounds/casino-sounds.mp3`](sounds/casino-sounds.mp3) (about 570 KB). It starts downloading as the page opens, is decoded once when audio starts, and is sliced into one clip per sound. The licence is in [`sounds/LICENSE-GeneralUser-GS.txt`](sounds/LICENSE-GeneralUser-GS.txt).
+
+The Web Audio API layers extra detail over the recordings: a struck-metal model under each bell for ring, a coin model under the triangle for body, and a mechanical clack under the wood block. If the recordings can't load, the models play on their own.
 
 | Sound | What you hear | Length |
 |---|---|---|
-| **Coin** (`playCoin`) | A crisp metallic *CHING*: sharp strike, bright disc resonance, a top-end sparkle and a tiny settle. Plays on bet buttons, Max bet, Refill and inside the win sequences. | about 0.2 s |
-| **Reel stop** (`playReelStop`) | A punchy mechanical *CLACK* with a metal latch. Each reel lands a little higher and harder. | about 0.05 s |
+| **Coin** (`playCoin`) | A crisp metallic *CHING*: a real triangle strike damped short, a bright coin model for the metal body, and now and then a jingle-bell rattle. Plays on bet buttons, Max bet, Refill and inside the win sequences. | about 0.2 s |
+| **Reel stop** (`playReelStop`) | A punchy *CLACK*: a real wood-block click over a mechanical knock and metal latch. Each reel lands a little higher and harder. | about 0.06 s |
 | **Reels spinning** | A *ka-chunk* start, then a ratchet clicking past the pawl that slows as each reel coasts in. | while spinning |
 | **Anticipation** (`playAnticipation`) | Soft ticking that speeds up, with small bells stepping upward. Starts when the first two reels line up a possible win and cuts off the instant the last reel lands. | while the last reel spins |
-| **Small win** (`playSmallWin`) | *DING! DING! DING! DING!*: four rising bells with coin chings. | about 1 s |
-| **Medium win** (`playMediumWin`) | *DING-DING-DING-DING-DING-DING*: nine fast rising bells over coin ticks, a sparkle and a two-bell finish. | about 2 s |
-| **Big win** (`playBigWin`) | A rapid two-bell ring, a rising two-octave cascade in thirds, coins pouring underneath, sparkles and a strummed bell-chord flourish. | about 3 s |
-| **Jackpot** (`playJackpot`) | The machine goes wild: an alarm-style bell roll, an 80-coin shower, a three-layer rising cascade, a second higher ring, glitter throughout and a triumphant strummed flourish that ends on one big combined hit. The Mega Jackpot adds another bell layer and a 120-coin shower. | about 4.5 s |
+| **Small win** (`playSmallWin`) | *DING! DING! DING! DING!*: four rising glockenspiel bells with coin chings. | about 1 s |
+| **Medium win** (`playMediumWin`) | *DING-DING-DING-DING-DING-DING*: nine fast rising glockenspiel bells over coin ticks, a chimes sweep and a two-bell finish. | about 2 s |
+| **Big win** (`playBigWin`) | A rapid two-bell ring, a rising two-octave cascade in thirds over a chimes sweep, coins pouring underneath, sparkles, and a strummed bell chord with a tubular bell and splash cymbal. | about 3.3 s |
+| **Jackpot** (`playJackpot`) | The machine goes wild: a splash cymbal and a bell roll with a ride-bell alarm, an 80-coin shower with tambourine, a three-layer rising cascade over a chimes sweep, a second higher ring, glitter throughout, and a tubular-bell and glockenspiel flourish that ends on one big hit with a crash cymbal. The Mega Jackpot adds another bell layer, a 120-coin shower and a final chimes sweep. | about 5 s |
 | **Bonus / free spins** | A fast bell trill into a rising cascade, or three rising bell triplets. | 1.5–2 s |
 
 A spin with no win is silent, like a real machine. Volumes are balanced (reel stop 25%, coin 35%, small 45%, medium 60%, big 75%, jackpot 100%), and a limiter keeps dense celebrations from distorting. The Win meter counts up in time with each win sound.
