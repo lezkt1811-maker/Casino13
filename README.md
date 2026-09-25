@@ -19,19 +19,31 @@ It is plain HTML, CSS and JavaScript with no build step. Open `index.html` in a 
 
 ## Sound
 
-Every sound is made live in the browser with the Web Audio API, with no audio files. Wins use a slot machine credit tally; celebrations add sparkles and fireworks.
+All sounds are generated in the browser with the Web Audio API, so there are no files to download. Every bell and coin is a layered struck-metal model: several inharmonic partials, a detuned pair for shimmer and a noise "strike" transient, with each layer decaying at its own rate. They're rendered once into a bank of sound clips when audio starts, so even a jackpot with hundreds of overlapping hits stays smooth on phones.
 
-- **Cosmos (ambience):** off by default, so the game is silent between spins. Tick Cosmos for occasional soft sparkles.
-- **Reels spinning:** a mechanical slot-reel sound: a *ka-chunk* as the reels start, a ratchet clicking about 22 times a second that slows as each reel coasts in, and a soft whir.
-- **Reel stops:** a heavy mechanical clunk as each reel locks in.
-- **Wins:** a slot machine credit tally. A fast electronic *ding-ding-ding-ding* rings about 16 times a second while the Win meter counts up, climbing in pitch as it goes. A short win jingle plays when the count finishes. Bigger wins tally for longer.
-- **Big wins:** a longer tally and a bigger jingle, followed by fireworks (a whistle up, a bang and a crackle).
-- **Jackpot:** a huge blast, a barrage of six fireworks, a brass fanfare and a four-second credit tally.
-- **Free spins:** a whirling tone that flies out and back, then a sparkling pop.
+| Sound | What you hear | Length |
+|---|---|---|
+| **Coin** (`playCoin`) | A crisp metallic *CHING*: sharp strike, bright disc resonance, a top-end sparkle and a tiny settle. Plays on bet buttons, Max bet, Refill and inside the win sequences. | about 0.2 s |
+| **Reel stop** (`playReelStop`) | A punchy mechanical *CLACK* with a metal latch. Each reel lands a little higher and harder. | about 0.05 s |
+| **Reels spinning** | A *ka-chunk* start, then a ratchet clicking past the pawl that slows as each reel coasts in. | while spinning |
+| **Anticipation** (`playAnticipation`) | Soft ticking that speeds up, with small bells stepping upward. Starts when the first two reels line up a possible win and cuts off the instant the last reel lands. | while the last reel spins |
+| **Small win** (`playSmallWin`) | *DING! DING! DING! DING!*: four rising bells with coin chings. | about 1 s |
+| **Medium win** (`playMediumWin`) | *DING-DING-DING-DING-DING-DING*: nine fast rising bells over coin ticks, a sparkle and a two-bell finish. | about 2 s |
+| **Big win** (`playBigWin`) | A rapid two-bell ring, a rising two-octave cascade in thirds, coins pouring underneath, sparkles and a strummed bell-chord flourish. | about 3 s |
+| **Jackpot** (`playJackpot`) | The machine goes wild: an alarm-style bell roll, an 80-coin shower, a three-layer rising cascade, a second higher ring, glitter throughout and a triumphant strummed flourish that ends on one big combined hit. The Mega Jackpot adds another bell layer and a 120-coin shower. | about 4.5 s |
+| **Bonus / free spins** | A fast bell trill into a rising cascade, or three rising bell triplets. | 1.5–2 s |
+
+A spin with no win is silent, like a real machine. Volumes are balanced (reel stop 25%, coin 35%, small 45%, medium 60%, big 75%, jackpot 100%), and a limiter keeps dense celebrations from distorting. The Win meter counts up in time with each win sound.
+
+**Win tiers:** small is under 2× the total bet, medium is 2–10×, big is 10× or more. The jackpot plays for Serpent Bearer Triple and the Mega Jackpot.
+
+**Mobile:** audio starts or resumes on every tap and key press, which Android Chrome requires, so sound keeps working after the phone suspends it. Finished sounds are disconnected so nothing piles up.
+
+**Cosmos (ambience):** off by default. When it's on, you hear a distant casino floor: occasional bells and coins.
 
 ### Use real casino recordings
 
-Put audio files in the [`sounds/`](sounds/) folder (for example `sounds/win.mp3`) and the game plays them instead of the built-in sounds. [`sounds/README.md`](sounds/README.md) lists the file names and where to find free casino sounds.
+Put MP3 or WAV files in the [`sounds/`](sounds/) folder (for example `sounds/win.mp3`) and the game plays them instead of the built-in sounds. [`sounds/README.md`](sounds/README.md) lists the file names and where to find free casino sounds.
 
 ## Paytable (per line × bet per line)
 
@@ -71,7 +83,7 @@ node simulate.js 5000000 1    # 1 line
 | `index.html` | Page markup |
 | `slots.css` | Neon cyberpunk theme: plasma background, synthwave grid, rainbow glow |
 | `slots-engine.js` | Pure game logic: symbols, weights, paylines, payouts. Works in the browser and in Node |
-| `slots.js` | Reel animation, controls, Web Audio sound effects, starfield background |
+| `slots.js` | Reel animation, controls, casino sound engine, starfield background |
 | `simulate.js` | Monte Carlo return-to-player check |
 
 ## Run locally
